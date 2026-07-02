@@ -5,17 +5,18 @@ import (
 	"net/http"
 
 	_ "github.com/lib/pq"
+	"github.com/nazifbara/kanban-api/internal/apiconfig"
 )
 
 func main() {
-	apiConfig := newAPIConfig()
+	apiConfig := apiconfig.NewAPIConfig()
 	mux := http.NewServeMux()
 
 	server := http.Server{
-		Addr:    ":" + apiConfig.port,
+		Addr:    ":" + apiConfig.Port,
 		Handler: mux,
 	}
 
-	log.Printf("Listening for requests on port %s", apiConfig.port)
+	log.Printf("Listening for requests on port %s", apiConfig.Port)
 	log.Fatal(server.ListenAndServe())
 }

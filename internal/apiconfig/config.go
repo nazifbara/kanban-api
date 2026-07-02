@@ -1,4 +1,4 @@
-package main
+package apiconfig
 
 import (
 	"database/sql"
@@ -9,12 +9,12 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
-type apiConfig struct {
-	port      string
-	dbQueries *database.Queries
+type ApiConfig struct {
+	Port      string
+	DBQueries *database.Queries
 }
 
-func newAPIConfig() apiConfig {
+func NewAPIConfig() ApiConfig {
 	godotenv.Load()
 
 	port := os.Getenv("API_PORT")
@@ -32,8 +32,8 @@ func newAPIConfig() apiConfig {
 	log.Println("Database connection established!")
 	dbQueries := database.New(db)
 
-	return apiConfig{
-		port:      port,
-		dbQueries: dbQueries,
+	return ApiConfig{
+		Port:      port,
+		DBQueries: dbQueries,
 	}
 }
