@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	_ "github.com/lib/pq"
-	"github.com/nazifbara/kanban-api/internal/apiconfig"
+	"github.com/nazifbara/kanban-api/api"
 )
 
 func main() {
-	apiConfig := apiconfig.NewAPIConfig()
+	apiConfig := api.NewAPIConfig()
 	mux := http.NewServeMux()
+
+	mux.HandleFunc("POST /api/boards", apiConfig.HandlerCreateBoard)
 
 	server := http.Server{
 		Addr:    ":" + apiConfig.Port,

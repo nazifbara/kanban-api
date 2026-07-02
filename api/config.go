@@ -1,4 +1,4 @@
-package apiconfig
+package api
 
 import (
 	"database/sql"
