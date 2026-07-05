@@ -3,10 +3,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nazifbara/kanban-api/internal/database"
 )
 
 type Board struct {
@@ -18,6 +20,30 @@ type Board struct {
 
 type BoardParam struct {
 	Name string `json:"name"`
+}
+
+func dbToBoard(dbBoard database.Board) Board {
+	return Board(dbBoard)
+}
+
+func dbToBoardSlice(dbBoards []database.Board) []Board {
+	var boards []Board
+	for _, dbBoard := range dbBoards {
+		boards = append(boards, dbToBoard(dbBoard))
+	}
+	return boards
+}
+
+func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
+	dbBoards, err := cfg.DBQueries.GetAllBoards(r.Context())
+	if err != nil {
+		log.Printf("failed to get the board: %v", err)
+		respondWith500(w, err)
+		return
+	}
+	boards := dbToBoardSlice(dbBoards)
+
+	respondWithJSON(w, 200, boards)
 }
 
 func (cfg *ApiConfig) HandlerCreateBoard(w http.ResponseWriter, r *http.Request) {

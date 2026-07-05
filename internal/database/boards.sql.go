@@ -31,3 +31,35 @@ func (q *Queries) CreateBoard(ctx context.Context, name string) (Board, error) {
 	)
 	return i, err
 }
+
+const getAllBoards = `-- name: GetAllBoards :many
+SELECT id, name, created_at, updated_at FROM boards ORDER BY created_at DESC
+`
+
+func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
+	rows, err := q.db.QueryContext(ctx, getAllBoards)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Board
+	for rows.Next() {
+		var i Board
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

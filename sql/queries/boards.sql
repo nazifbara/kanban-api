@@ -1,3 +1,6 @@
+-- name: GetAllBoards :many
+SELECT * FROM boards ORDER BY created_at DESC;
+
 -- name: CreateBoard :one
 INSERT INTO boards (id, name, created_at, updated_at)
 VALUES (

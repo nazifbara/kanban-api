@@ -13,6 +13,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("POST /api/boards", apiConfig.HandlerCreateBoard)
+	mux.HandleFunc("GET /api/boards", apiConfig.HandlerGetAllBoards)
 
 	server := http.Server{
 		Addr:    ":" + apiConfig.Port,
