@@ -1,3 +1,6 @@
+-- name: DeleteBoard :one
+DELETE FROM boards WHERE id = $1 RETURNING *;
+
 -- name: GetBoardByID :one
 SELECT * FROM boards WHERE id = $1;
 

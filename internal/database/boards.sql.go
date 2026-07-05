@@ -34,6 +34,22 @@ func (q *Queries) CreateBoard(ctx context.Context, name string) (Board, error) {
 	return i, err
 }
 
+const deleteBoard = `-- name: DeleteBoard :one
+DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at
+`
+
+func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) {
+	row := q.db.QueryRowContext(ctx, deleteBoard, id)
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getAllBoards = `-- name: GetAllBoards :many
 SELECT id, name, created_at, updated_at FROM boards ORDER BY created_at DESC
 `

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	utils "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
@@ -22,23 +23,25 @@ type BoardParam struct {
 	Name string `json:"name"`
 }
 
-func dbToBoard(dbBoard database.Board) Board {
-	return Board(dbBoard)
-}
-
-func dbToBoardSlice(dbBoards []database.Board) []Board {
-	var boards []Board
-	for _, dbBoard := range dbBoards {
-		boards = append(boards, dbToBoard(dbBoard))
+func (cfg *ApiConfig) HandlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
+	boardID, err := utils.GetIdFromPath(r, "boardID")
+	if err != nil {
+		log.Printf("invalid board id: %v", err)
+		respondWithError(w, 400, "invalid uuid", err)
+		return
 	}
-	return boards
+	_, err = cfg.DBQueries.DeleteBoard(r.Context(), boardID)
+	if err != nil {
+		respondWithError(w, 404, "failed to delete board", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
-	idQuery := r.PathValue("boardID")
-	boardID, err := uuid.Parse(idQuery)
+	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
-		log.Printf("invalid board id: %s", idQuery)
+		log.Printf("invalid board id: %v", err)
 		respondWithError(w, 400, "invalid uuid", err)
 		return
 	}
@@ -91,4 +94,16 @@ func validateBoardParams(param BoardParam) error {
 	}
 
 	return nil
+}
+
+func dbToBoard(dbBoard database.Board) Board {
+	return Board(dbBoard)
+}
+
+func dbToBoardSlice(dbBoards []database.Board) []Board {
+	var boards []Board
+	for _, dbBoard := range dbBoards {
+		boards = append(boards, dbToBoard(dbBoard))
+	}
+	return boards
 }
