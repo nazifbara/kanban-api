@@ -14,6 +14,7 @@ func main() {
 
 	mux.HandleFunc("POST /api/boards", apiConfig.HandlerCreateBoard)
 	mux.HandleFunc("GET /api/boards", apiConfig.HandlerGetAllBoards)
+	mux.HandleFunc("GET /api/boards/{boardID}", apiConfig.HandlerGetBoard)
 
 	server := http.Server{
 		Addr:    ":" + apiConfig.Port,

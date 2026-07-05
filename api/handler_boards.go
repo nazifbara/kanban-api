@@ -34,6 +34,23 @@ func dbToBoardSlice(dbBoards []database.Board) []Board {
 	return boards
 }
 
+func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
+	idQuery := r.PathValue("boardID")
+	boardID, err := uuid.Parse(idQuery)
+	if err != nil {
+		log.Printf("invalid board id: %s", idQuery)
+		respondWithError(w, 400, "invalid uuid", err)
+		return
+	}
+	dbBoard, err := cfg.DBQueries.GetBoardByID(r.Context(), boardID)
+	if err != nil {
+		log.Printf("failed to get the baord: %v", err)
+		respondWithError(w, 404, "Board not found", err)
+		return
+	}
+	respondWithJSON(w, 200, dbToBoard(dbBoard))
+}
+
 func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 	dbBoards, err := cfg.DBQueries.GetAllBoards(r.Context())
 	if err != nil {

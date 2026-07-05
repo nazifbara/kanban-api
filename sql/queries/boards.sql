@@ -1,3 +1,6 @@
+-- name: GetBoardByID :one
+SELECT * FROM boards WHERE id = $1;
+
 -- name: GetAllBoards :many
 SELECT * FROM boards ORDER BY created_at DESC;
 

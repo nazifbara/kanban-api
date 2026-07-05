@@ -7,6 +7,8 @@ package database
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createBoard = `-- name: CreateBoard :one
@@ -62,4 +64,20 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const getBoardByID = `-- name: GetBoardByID :one
+SELECT id, name, created_at, updated_at FROM boards WHERE id = $1
+`
+
+func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error) {
+	row := q.db.QueryRowContext(ctx, getBoardByID, id)
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
