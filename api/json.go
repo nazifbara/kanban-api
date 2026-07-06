@@ -8,6 +8,15 @@ import (
 	"net/http"
 )
 
+func decodeJSONBody[T any](r *http.Request) (T, error) {
+	var params T
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&params); err != nil {
+		return params, err
+	}
+	return params, nil
+}
+
 func respondFromDBErr(w http.ResponseWriter, msg string, err error) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

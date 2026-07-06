@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -30,10 +29,8 @@ func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 400, "invalid uuid", err)
 		return
 	}
-	decoder := json.NewDecoder(r.Body)
-	var params BoardParam
-	if err := decoder.Decode(&params); err != nil {
-		log.Println("Invalid request body")
+	params, err := decodeJSONBody[BoardParam](r)
+	if err != nil {
 		respondWithError(w, 400, "Invalid request body", err)
 		return
 	}
@@ -93,10 +90,9 @@ func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request
 }
 
 func (cfg *ApiConfig) HandlerCreateBoard(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
-	params := BoardParam{}
-	if err := decoder.Decode(&params); err != nil {
-		respondWith500(w, err)
+	params, err := decodeJSONBody[BoardParam](r)
+	if err != nil {
+		respondWithError(w, 400, "invalid request body", err)
 		return
 	}
 
