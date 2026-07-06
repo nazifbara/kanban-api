@@ -5,6 +5,7 @@
 package database
 
 import (
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,4 +16,13 @@ type Board struct {
 	Name      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+}
+
+type State struct {
+	ID          uuid.UUID
+	Title       string
+	Description sql.NullString
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	BoardID     uuid.UUID
 }
