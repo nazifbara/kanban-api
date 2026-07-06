@@ -1,10 +1,23 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 )
+
+func respondFromDBErr(w http.ResponseWriter, msg string, err error) {
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			respondWithError(w, 404, msg, err)
+			return
+		}
+		respondWith500(w, err)
+		return
+	}
+}
 
 func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	data, err := json.Marshal(payload)

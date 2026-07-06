@@ -1,9 +1,7 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -45,9 +43,8 @@ func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	dbBoard, err := cfg.DBQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Printf("failed to update the board: %v", err)
-		respondWithError(w, 404, "Board not found", err)
+	if err != nil {
+		respondFromDBErr(w, "Board not found", err)
 		return
 	}
 	respondWithJSON(w, 201, dbToBoard(dbBoard))
@@ -63,7 +60,7 @@ func (cfg *ApiConfig) HandlerDeleteBoard(w http.ResponseWriter, r *http.Request)
 	}
 	_, err = cfg.DBQueries.DeleteBoard(r.Context(), boardID)
 	if err != nil {
-		respondWithError(w, 404, "failed to delete board", err)
+		respondFromDBErr(w, "Board not found", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -78,8 +75,7 @@ func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
 	}
 	dbBoard, err := cfg.DBQueries.GetBoardByID(r.Context(), boardID)
 	if err != nil {
-		log.Printf("failed to get the baord: %v", err)
-		respondWithError(w, 404, "Board not found", err)
+		respondFromDBErr(w, "Board not found", err)
 		return
 	}
 	respondWithJSON(w, 200, dbToBoard(dbBoard))
@@ -88,7 +84,6 @@ func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
 func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 	dbBoards, err := cfg.DBQueries.GetAllBoards(r.Context())
 	if err != nil {
-		log.Printf("failed to get the board: %v", err)
 		respondWith500(w, err)
 		return
 	}
