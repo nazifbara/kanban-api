@@ -1,7 +1,9 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -23,11 +25,40 @@ type BoardParam struct {
 	Name string `json:"name"`
 }
 
+func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
+	boardID, err := utils.GetIdFromPath(r, "boardID")
+	if err != nil {
+		log.Printf("invalid board id: %v", err)
+		respondWithError(w, 400, "invalid uuid", err)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	var params BoardParam
+	if err := decoder.Decode(&params); err != nil {
+		log.Println("Invalid request body")
+		respondWithError(w, 400, "Invalid request body", err)
+		return
+	}
+	if params.Name == "" {
+		err := fmt.Errorf("body.name is requires")
+		respondWithError(w, 400, err.Error(), err)
+		return
+	}
+	dbBoard, err := cfg.DBQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Printf("failed to update the board: %v", err)
+		respondWithError(w, 404, "Board not found", err)
+		return
+	}
+	respondWithJSON(w, 201, dbToBoard(dbBoard))
+}
+
 func (cfg *ApiConfig) HandlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
 		respondWithError(w, 400, "invalid uuid", err)
+
 		return
 	}
 	_, err = cfg.DBQueries.DeleteBoard(r.Context(), boardID)

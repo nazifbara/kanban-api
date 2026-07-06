@@ -1,3 +1,6 @@
+-- name: UpdateBoard :one
+UPDATE boards SET name = $1 WHERE id = $2 RETURNING *;
+
 -- name: DeleteBoard :one
 DELETE FROM boards WHERE id = $1 RETURNING *;
 

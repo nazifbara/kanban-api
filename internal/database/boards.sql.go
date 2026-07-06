@@ -97,3 +97,24 @@ func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error)
 	)
 	return i, err
 }
+
+const updateBoard = `-- name: UpdateBoard :one
+UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at
+`
+
+type UpdateBoardParams struct {
+	Name string
+	ID   uuid.UUID
+}
+
+func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (Board, error) {
+	row := q.db.QueryRowContext(ctx, updateBoard, arg.Name, arg.ID)
+	var i Board
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
