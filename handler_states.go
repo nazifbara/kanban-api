@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -26,11 +27,11 @@ type StateParams struct {
 func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[StateParams](r)
 	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "invalid request body", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("malformed request body"))
 		return
 	}
 	if err := validateState(params); err != nil {
-		respondWithError(w, http.StatusBadRequest, err.Error(), err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, err)
 		return
 	}
 	dbState, err := s.dbQueries.CreateState(
@@ -38,7 +39,7 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 		database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
 	)
 	if err != nil {
-		respondWith500(w, err)
+		respondWith500(r.Context(), w, err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, dbToState(dbState))

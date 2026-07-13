@@ -13,6 +13,8 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
+type contextKey string
+
 type server struct {
 	httpServer *http.Server
 	dbQueries  *database.Queries
@@ -90,6 +92,12 @@ func (s *spyResponseWriter) WriteHeader(code int) {
 	s.ResponseWriter.WriteHeader(code)
 }
 
+var logContextKey contextKey = "log_context"
+
+type LogContext struct {
+	Error error
+}
+
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -97,6 +105,8 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			spyReader := &spyReadCloser{ReadCloser: r.Body}
 			r.Body = spyReader
 			spyRespond := &spyResponseWriter{ResponseWriter: w}
+			logCtx := &LogContext{}
+			r = r.WithContext(context.WithValue(r.Context(), logContextKey, logCtx))
 
 			next.ServeHTTP(spyRespond, r)
 
@@ -107,6 +117,9 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				slog.Int("request_body_bytes", spyReader.bytesRead),
 				slog.Int("response_body_bytes", spyRespond.bytesWritten),
 				slog.Int("response_status", spyRespond.statusCode),
+			}
+			if logCtx.Error != nil {
+				slogAttrs = append(slogAttrs, slog.Any("error", logCtx.Error))
 			}
 
 			logger.Info("served request", slogAttrs...)

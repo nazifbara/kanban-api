@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -26,22 +27,21 @@ func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
-		respondWithError(w, 400, "invalid uuid", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("invalid board id"))
 		return
 	}
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		respondWithError(w, 400, "Invalid request body", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("malformed request body"))
 		return
 	}
 	if params.Name == "" {
-		err := fmt.Errorf("body.name is requires")
-		respondWithError(w, 400, err.Error(), err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("body.name is required"))
 		return
 	}
 	dbBoard, err := s.dbQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
 	if err != nil {
-		respondFromDBErr(w, "Board not found", err)
+		respondFromDBErr(r.Context(), w, err)
 		return
 	}
 	respondWithJSON(w, 201, dbToBoard(dbBoard))
@@ -51,12 +51,12 @@ func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
-		respondWithError(w, 400, "invalid uuid", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
 		return
 	}
 	_, err = s.dbQueries.DeleteBoard(r.Context(), boardID)
 	if err != nil {
-		respondFromDBErr(w, "Board not found", err)
+		respondFromDBErr(r.Context(), w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -65,22 +65,21 @@ func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
-		log.Printf("invalid board id: %v", err)
-		respondWithError(w, 400, "invalid uuid", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
 		return
 	}
 	dbBoard, err := s.dbQueries.GetBoardByID(r.Context(), boardID)
 	if err != nil {
-		respondFromDBErr(w, "Board not found", err)
+		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, 200, dbToBoard(dbBoard))
+	respondWithJSON(w, http.StatusOK, dbToBoard(dbBoard))
 }
 
 func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 	dbBoards, err := s.dbQueries.GetAllBoards(r.Context())
 	if err != nil {
-		respondWith500(w, err)
+		respondWith500(r.Context(), w, err)
 		return
 	}
 	boards := dbToBoardSlice(dbBoards)
@@ -91,18 +90,18 @@ func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		respondWithError(w, 400, "invalid request body", err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid request body"))
 		return
 	}
 
 	if err := validateBoardParams(params); err != nil {
-		respondWithError(w, 400, err.Error(), err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, err)
 		return
 	}
 
 	dbBoard, err := s.dbQueries.CreateBoard(r.Context(), params.Name)
 	if err != nil {
-		respondWith500(w, err)
+		respondWith500(r.Context(), w, err)
 		return
 	}
 

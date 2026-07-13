@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"slices"
 )
 
 func decodeJSONBody[T any](r *http.Request) (T, error) {
@@ -17,15 +19,12 @@ func decodeJSONBody[T any](r *http.Request) (T, error) {
 	return params, nil
 }
 
-func respondFromDBErr(w http.ResponseWriter, msg string, err error) {
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			respondWithError(w, 404, msg, err)
-			return
-		}
-		respondWith500(w, err)
+func respondFromDBErr(ctx context.Context, w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		respondWithError(ctx, w, http.StatusNotFound, err)
 		return
 	}
+	respondWith500(ctx, w, err)
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload any) {
@@ -40,22 +39,32 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Write(data)
 }
 
-func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
-	log.Printf("%v", err)
+func respondWithError(ctx context.Context, w http.ResponseWriter, code int, err error) {
+	errs := []error{err}
+	codesToText := []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusNotFound}
 	type respondBody struct {
 		Error string `json:"error"`
 	}
-	data, err := json.Marshal(respondBody{Error: msg})
+	var response respondBody
+	if slices.Contains(codesToText, code) {
+		response.Error = http.StatusText(code)
+	} else {
+		response.Error = err.Error()
+	}
+	data, err := json.Marshal(response)
 	if err != nil {
-		log.Printf("Error while marshaling response body: %v", err)
+		errs = append(errs, err)
 		w.WriteHeader(500)
 		return
+	}
+	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
+		logCtx.Error = errors.Join(errs...)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	w.Write(data)
 }
 
-func respondWith500(w http.ResponseWriter, err error) {
-	respondWithError(w, 500, "Somthing went wrong", err)
+func respondWith500(ctx context.Context, w http.ResponseWriter, err error) {
+	respondWithError(ctx, w, 500, err)
 }
