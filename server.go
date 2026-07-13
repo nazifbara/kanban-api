@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/nazifbara/kanban-api/internal/database"
 )
@@ -22,7 +24,7 @@ func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cance
 	mux := http.NewServeMux()
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
+		Handler: requestLogger(logger)(mux),
 	}
 	s := &server{
 		httpServer: srv,
@@ -55,4 +57,59 @@ func (s *server) start() error {
 
 func (s *server) shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
+}
+
+type spyReadCloser struct {
+	io.ReadCloser
+	bytesRead int
+}
+
+func (s *spyReadCloser) Read(p []byte) (int, error) {
+	n, err := s.ReadCloser.Read(p)
+	s.bytesRead += n
+	return n, err
+}
+
+type spyResponseWriter struct {
+	http.ResponseWriter
+	statusCode   int
+	bytesWritten int
+}
+
+func (s *spyResponseWriter) Write(p []byte) (int, error) {
+	if s.statusCode == 0 {
+		s.statusCode = http.StatusOK
+	}
+	n, err := s.ResponseWriter.Write(p)
+	s.bytesWritten += n
+	return n, err
+}
+
+func (s *spyResponseWriter) WriteHeader(code int) {
+	s.statusCode = code
+	s.ResponseWriter.WriteHeader(code)
+}
+
+func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			spyReader := &spyReadCloser{ReadCloser: r.Body}
+			r.Body = spyReader
+			spyRespond := &spyResponseWriter{ResponseWriter: w}
+
+			next.ServeHTTP(spyRespond, r)
+
+			slogAttrs := []any{
+				slog.String("method", r.Method),
+				slog.String("path", r.URL.Path),
+				slog.Duration("duration", time.Since(start)),
+				slog.Int("request_body_bytes", spyReader.bytesRead),
+				slog.Int("response_body_bytes", spyRespond.bytesWritten),
+				slog.Int("response_status", spyRespond.statusCode),
+			}
+
+			logger.Info("served request", slogAttrs...)
+		})
+	}
 }
