@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"slices"
+
+	pkgerr "github.com/pkg/errors"
 )
 
 func decodeJSONBody[T any](r *http.Request) (T, error) {
@@ -58,7 +60,7 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, code int, err 
 		return
 	}
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
-		logCtx.Error = errors.Join(errs...)
+		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -14,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/nazifbara/kanban-api/internal/database"
+	pkgerr "github.com/pkg/errors"
 )
 
 func main() {
@@ -64,6 +66,32 @@ func initializeDB(dbURL string) (*database.Queries, error) {
 }
 
 func initializeLogger() *slog.Logger {
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: replaceLogAttr})
 	return slog.New(handler)
+}
+
+type stackTracker interface {
+	error
+	StackTrace() pkgerr.StackTrace
+}
+
+func errorAttrs(err error) []slog.Attr {
+	attrs := []slog.Attr{
+		slog.String("message", err.Error()),
+	}
+	if stackErr, ok := errors.AsType[stackTracker](err); ok {
+		attrs = append(attrs, slog.String("stack_trace", fmt.Sprintf("%+v", stackErr.StackTrace())))
+	}
+	return attrs
+}
+
+func replaceLogAttr(groups []string, a slog.Attr) slog.Attr {
+	if a.Key == "error" {
+		err, ok := a.Value.Any().(error)
+		if !ok {
+			return a
+		}
+		return slog.GroupAttrs("error", errorAttrs(err)...)
+	}
+	return a
 }
