@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,11 +27,12 @@ func main() {
 }
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int) int {
+	logger := initializeLogger()
 	dbQueries, err := initializeDB(os.Getenv("DB_URL"))
 	if err != nil {
-		log.Printf("failed to connect to DB: %v", err)
+		logger.Error(fmt.Sprintf("failed to connect to DB: %v", err))
 	}
-	s := newServer(httpPort, dbQueries, cancel)
+	s := newServer(httpPort, dbQueries, logger, cancel)
 	var serverError error
 	go func() {
 		serverError = s.start()
@@ -41,13 +43,13 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int) int {
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	log.Println("kanban api is shutting down")
+	logger.Debug("kanban api is shutting down")
 	if err := s.shutdown(shutdownCtx); err != nil {
-		log.Printf("failed to shutdown the server: %v", err)
+		logger.Error(fmt.Sprintf("failed to shutdown the server: %v", err))
 		return 1
 	}
 	if serverError != nil {
-		log.Printf("server error: %v", serverError)
+		logger.Error(fmt.Sprintf("server error: %v", serverError))
 		return 1
 	}
 	return 0
@@ -59,4 +61,9 @@ func initializeDB(dbURL string) (*database.Queries, error) {
 		return nil, err
 	}
 	return database.New(db), nil
+}
+
+func initializeLogger() *slog.Logger {
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})
+	return slog.New(handler)
 }

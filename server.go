@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 
@@ -14,10 +14,11 @@ import (
 type server struct {
 	httpServer *http.Server
 	dbQueries  *database.Queries
+	logger     *slog.Logger
 	cancel     context.CancelFunc
 }
 
-func newServer(port int, dbQueries *database.Queries, cancel context.CancelFunc) *server {
+func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cancel context.CancelFunc) *server {
 	mux := http.NewServeMux()
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -26,6 +27,7 @@ func newServer(port int, dbQueries *database.Queries, cancel context.CancelFunc)
 	s := &server{
 		httpServer: srv,
 		dbQueries:  dbQueries,
+		logger:     logger,
 		cancel:     cancel,
 	}
 
@@ -44,7 +46,7 @@ func (s *server) start() error {
 	if err != nil {
 		return err
 	}
-	log.Printf("Kanban API is running on http://localhost:%d", ln.Addr().(*net.TCPAddr).Port)
+	s.logger.Debug(fmt.Sprintf("Kanban API is running on http://localhost:%d", ln.Addr().(*net.TCPAddr).Port))
 	if err := s.httpServer.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
