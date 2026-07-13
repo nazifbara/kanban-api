@@ -12,6 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
+
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/nazifbara/kanban-api/internal/database"
@@ -66,7 +69,11 @@ func initializeDB(dbURL string) (*database.Queries, error) {
 }
 
 func initializeLogger() *slog.Logger {
-	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug, ReplaceAttr: replaceLogAttr})
+	handler := tint.NewTextHandler(os.Stderr, &tint.Options{
+		Level:       slog.LevelDebug,
+		ReplaceAttr: replaceLogAttr,
+		NoColor:     !(isatty.IsCygwinTerminal(os.Stderr.Fd()) || isatty.IsTerminal(os.Stderr.Fd())),
+	})
 	return slog.New(handler)
 }
 
