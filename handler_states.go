@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ type StateParams struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-func (cfg *ApiConfig) HandlerCreateState(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[StateParams](r)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "invalid request body", err)
@@ -33,7 +33,7 @@ func (cfg *ApiConfig) HandlerCreateState(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusBadRequest, err.Error(), err)
 		return
 	}
-	dbState, err := cfg.DBQueries.CreateState(
+	dbState, err := s.dbQueries.CreateState(
 		r.Context(),
 		database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
 	)

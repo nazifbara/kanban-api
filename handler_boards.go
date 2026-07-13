@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"fmt"
@@ -22,7 +22,7 @@ type BoardParam struct {
 	Name string `json:"name"`
 }
 
-func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
+func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
@@ -39,7 +39,7 @@ func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, 400, err.Error(), err)
 		return
 	}
-	dbBoard, err := cfg.DBQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
+	dbBoard, err := s.dbQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
 	if err != nil {
 		respondFromDBErr(w, "Board not found", err)
 		return
@@ -47,15 +47,14 @@ func (cfg *ApiConfig) HanlderUpdateBoard(w http.ResponseWriter, r *http.Request)
 	respondWithJSON(w, 201, dbToBoard(dbBoard))
 }
 
-func (cfg *ApiConfig) HandlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
 		respondWithError(w, 400, "invalid uuid", err)
-
 		return
 	}
-	_, err = cfg.DBQueries.DeleteBoard(r.Context(), boardID)
+	_, err = s.dbQueries.DeleteBoard(r.Context(), boardID)
 	if err != nil {
 		respondFromDBErr(w, "Board not found", err)
 		return
@@ -63,14 +62,14 @@ func (cfg *ApiConfig) HandlerDeleteBoard(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
 		respondWithError(w, 400, "invalid uuid", err)
 		return
 	}
-	dbBoard, err := cfg.DBQueries.GetBoardByID(r.Context(), boardID)
+	dbBoard, err := s.dbQueries.GetBoardByID(r.Context(), boardID)
 	if err != nil {
 		respondFromDBErr(w, "Board not found", err)
 		return
@@ -78,8 +77,8 @@ func (cfg *ApiConfig) HandlerGetBoard(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, dbToBoard(dbBoard))
 }
 
-func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
-	dbBoards, err := cfg.DBQueries.GetAllBoards(r.Context())
+func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
+	dbBoards, err := s.dbQueries.GetAllBoards(r.Context())
 	if err != nil {
 		respondWith500(w, err)
 		return
@@ -89,7 +88,7 @@ func (cfg *ApiConfig) HandlerGetAllBoards(w http.ResponseWriter, r *http.Request
 	respondWithJSON(w, 200, boards)
 }
 
-func (cfg *ApiConfig) HandlerCreateBoard(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
 		respondWithError(w, 400, "invalid request body", err)
@@ -101,7 +100,7 @@ func (cfg *ApiConfig) HandlerCreateBoard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	dbBoard, err := cfg.DBQueries.CreateBoard(r.Context(), params.Name)
+	dbBoard, err := s.dbQueries.CreateBoard(r.Context(), params.Name)
 	if err != nil {
 		respondWith500(w, err)
 		return

@@ -1,29 +1,62 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"flag"
 	"log"
-	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/nazifbara/kanban-api/api"
+	"github.com/nazifbara/kanban-api/internal/database"
 )
 
 func main() {
-	apiConfig := api.NewAPIConfig()
-	mux := http.NewServeMux()
+	godotenv.Load()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	httpPort := flag.Int("port", 8080, "port to listen on")
+	flag.Parse()
+	status := run(ctx, cancel, *httpPort)
+	cancel()
+	os.Exit(status)
+}
 
-	mux.HandleFunc("POST /api/boards", apiConfig.HandlerCreateBoard)
-	mux.HandleFunc("GET /api/boards", apiConfig.HandlerGetAllBoards)
-	mux.HandleFunc("GET /api/boards/{boardID}", apiConfig.HandlerGetBoard)
-	mux.HandleFunc("DELETE /api/boards/{boardID}", apiConfig.HandlerDeleteBoard)
-	mux.HandleFunc("PUT /api/boards/{boardID}", apiConfig.HanlderUpdateBoard)
-	mux.HandleFunc("POST /api/states", apiConfig.HandlerCreateState)
-
-	server := http.Server{
-		Addr:    ":" + apiConfig.Port,
-		Handler: mux,
+func run(ctx context.Context, cancel context.CancelFunc, httpPort int) int {
+	dbQueries, err := initializeDB(os.Getenv("DB_URL"))
+	if err != nil {
+		log.Printf("failed to connect to DB: %v", err)
 	}
+	s := newServer(httpPort, dbQueries, cancel)
+	var serverError error
+	go func() {
+		serverError = s.start()
+		cancel()
+	}()
 
-	log.Printf("Listening for requests on port %s", apiConfig.Port)
-	log.Fatal(server.ListenAndServe())
+	<-ctx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	log.Println("kanban api is shutting down")
+	if err := s.shutdown(shutdownCtx); err != nil {
+		log.Printf("failed to shutdown the server: %v", err)
+		return 1
+	}
+	if serverError != nil {
+		log.Printf("server error: %v", serverError)
+		return 1
+	}
+	return 0
+}
+
+func initializeDB(dbURL string) (*database.Queries, error) {
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		return nil, err
+	}
+	return database.New(db), nil
 }
