@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"log"
@@ -13,14 +14,16 @@ import (
 )
 
 type Board struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type BoardParam struct {
-	Name string `json:"name"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
@@ -99,13 +102,16 @@ func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbBoard, err := s.dbQueries.CreateBoard(r.Context(), params.Name)
+	dbBoard, err := s.dbQueries.CreateBoard(r.Context(), database.CreateBoardParams{
+		Name:        params.Name,
+		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
+	})
 	if err != nil {
 		respondWith500(r.Context(), w, err)
 		return
 	}
 
-	respondWithJSON(w, 201, Board(dbBoard))
+	respondWithJSON(w, 201, dbToBoard(dbBoard))
 }
 
 func validateBoardParams(param BoardParam) error {
@@ -117,7 +123,13 @@ func validateBoardParams(param BoardParam) error {
 }
 
 func dbToBoard(dbBoard database.Board) Board {
-	return Board(dbBoard)
+	return Board{
+		ID:          dbBoard.ID,
+		Name:        dbBoard.Name,
+		Description: dbBoard.Description.String,
+		CreatedAt:   dbBoard.CreatedAt,
+		UpdatedAt:   dbBoard.UpdatedAt,
+	}
 }
 
 func dbToBoardSlice(dbBoards []database.Board) []Board {

@@ -7,35 +7,43 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
 
 const createBoard = `-- name: CreateBoard :one
-INSERT INTO boards (id, name, created_at, updated_at)
+INSERT INTO boards (id, name, description, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     $1,
+    $2,
     NOw(),
     NOW()
 )
-RETURNING id, name, created_at, updated_at
+RETURNING id, name, created_at, updated_at, description
 `
 
-func (q *Queries) CreateBoard(ctx context.Context, name string) (Board, error) {
-	row := q.db.QueryRowContext(ctx, createBoard, name)
+type CreateBoardParams struct {
+	Name        string
+	Description sql.NullString
+}
+
+func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error) {
+	row := q.db.QueryRowContext(ctx, createBoard, arg.Name, arg.Description)
 	var i Board
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const deleteBoard = `-- name: DeleteBoard :one
-DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at
+DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at, description
 `
 
 func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -46,12 +54,13 @@ func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) 
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const getAllBoards = `-- name: GetAllBoards :many
-SELECT id, name, created_at, updated_at FROM boards ORDER BY created_at DESC
+SELECT id, name, created_at, updated_at, description FROM boards ORDER BY created_at DESC
 `
 
 func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
@@ -68,6 +77,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 			&i.Name,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}
@@ -83,7 +93,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 }
 
 const getBoardByID = `-- name: GetBoardByID :one
-SELECT id, name, created_at, updated_at FROM boards WHERE id = $1
+SELECT id, name, created_at, updated_at, description FROM boards WHERE id = $1
 `
 
 func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -94,12 +104,13 @@ func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error)
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
 
 const updateBoard = `-- name: UpdateBoard :one
-UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at
+UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description
 `
 
 type UpdateBoardParams struct {
@@ -115,6 +126,7 @@ func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (Board
 		&i.Name,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Description,
 	)
 	return i, err
 }
