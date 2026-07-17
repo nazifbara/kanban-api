@@ -41,6 +41,7 @@ func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cance
 	mux.HandleFunc("DELETE /api/boards/{boardID}", s.handlerDeleteBoard)
 	mux.HandleFunc("PUT /api/boards/{boardID}", s.hanlderUpdateBoard)
 	mux.HandleFunc("POST /api/states", s.handlerCreateState)
+	mux.HandleFunc("GET /api/states", s.handlerGetStates)
 
 	return s
 }

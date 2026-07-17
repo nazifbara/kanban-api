@@ -40,3 +40,37 @@ func (q *Queries) CreateState(ctx context.Context, arg CreateStateParams) (State
 	)
 	return i, err
 }
+
+const getStates = `-- name: GetStates :many
+SELECT id, title, description, created_at, updated_at, board_id from states WHERE board_id = $1 ORDER BY created_at DESC
+`
+
+func (q *Queries) GetStates(ctx context.Context, boardID uuid.UUID) ([]State, error) {
+	rows, err := q.db.QueryContext(ctx, getStates, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []State
+	for rows.Next() {
+		var i State
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BoardID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

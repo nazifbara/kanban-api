@@ -24,6 +24,28 @@ type StateParams struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
+type stateBoardID struct {
+	BoardID uuid.UUID `json:"board_id"`
+}
+
+func (s *server) handlerGetStates(w http.ResponseWriter, r *http.Request) {
+	param, err := decodeJSONBody[stateBoardID](r)
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("Invalid request body"))
+	}
+	board, err := s.dbQueries.GetBoardByID(r.Context(), param.BoardID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	dbStates, err := s.dbQueries.GetStates(r.Context(), board.ID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	respondWithJSON(w, 200, dbToStateSlice(dbStates))
+}
+
 func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[StateParams](r)
 	if err != nil {
@@ -45,9 +67,18 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusCreated, dbToState(dbState))
 }
 
+func dbToStateSlice(dbStates []database.State) []State {
+	states := []State{}
+	for _, dbState := range dbStates {
+		states = append(states, dbToState(dbState))
+	}
+	return states
+}
+
 func dbToState(dbState database.State) State {
 	return State{
 		ID:          dbState.ID,
+		Title:       dbState.Title,
 		CreatedAt:   dbState.CreatedAt,
 		UpdatedAt:   dbState.UpdatedAt,
 		Description: dbState.Description.String,

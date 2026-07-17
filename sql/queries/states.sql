@@ -7,3 +7,6 @@ VALUES (
     NOW(),
     $2
 ) RETURNING *;
+
+-- name: GetStates :many
+SELECT * from states WHERE board_id = $1 ORDER BY created_at DESC;
