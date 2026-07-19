@@ -12,11 +12,12 @@ import (
 )
 
 type Board struct {
-	ID          uuid.UUID
-	Name        string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Description sql.NullString
+	ID             uuid.UUID
+	Name           string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Description    sql.NullString
+	StatePositions []uuid.UUID
 }
 
 type State struct {

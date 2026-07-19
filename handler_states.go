@@ -56,10 +56,30 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, err)
 		return
 	}
-	dbState, err := s.store.CreateState(
-		r.Context(),
-		database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
-	)
+	var dbState database.State
+	s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+		dbState, err = qtx.CreateState(
+			r.Context(),
+			database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
+		)
+		if err != nil {
+			return err
+		}
+		dbBoard, err := qtx.GetBoardByID(r.Context(), params.BoardID)
+		if err != nil {
+			return err
+		}
+		dbBoard.StatePositions = append(dbBoard.StatePositions, dbState.ID)
+		_, err = qtx.AdjustBoardPositions(r.Context(), database.AdjustBoardPositionsParams{
+			ID:             params.BoardID,
+			StatePositions: dbBoard.StatePositions,
+		})
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+
 	if err != nil {
 		respondWith500(r.Context(), w, err)
 		return

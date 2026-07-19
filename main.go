@@ -33,11 +33,11 @@ func main() {
 
 func run(ctx context.Context, cancel context.CancelFunc, httpPort int) int {
 	logger := initializeLogger()
-	dbQueries, err := initializeDB(os.Getenv("DB_URL"))
+	store, err := initializeStore(os.Getenv("DB_URL"))
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to connect to DB: %v", err))
 	}
-	s := newServer(httpPort, dbQueries, logger, cancel)
+	s := newServer(httpPort, store, logger, cancel)
 	var serverError error
 	go func() {
 		serverError = s.start()
@@ -65,7 +65,6 @@ func initializeStore(dbURL string) (*store, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &store{Queries: database.New(db), db: db}, nil
 }
 
