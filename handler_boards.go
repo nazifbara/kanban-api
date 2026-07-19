@@ -42,7 +42,7 @@ func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("body.name is required"))
 		return
 	}
-	dbBoard, err := s.dbQueries.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
+	dbBoard, err := s.store.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
@@ -57,7 +57,7 @@ func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
 		return
 	}
-	_, err = s.dbQueries.DeleteBoard(r.Context(), boardID)
+	_, err = s.store.DeleteBoard(r.Context(), boardID)
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
@@ -71,7 +71,7 @@ func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
 		return
 	}
-	dbBoard, err := s.dbQueries.GetBoardByID(r.Context(), boardID)
+	dbBoard, err := s.store.GetBoardByID(r.Context(), boardID)
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
@@ -80,7 +80,7 @@ func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
-	dbBoards, err := s.dbQueries.GetAllBoards(r.Context())
+	dbBoards, err := s.store.GetAllBoards(r.Context())
 	if err != nil {
 		respondWith500(r.Context(), w, err)
 		return
@@ -102,7 +102,7 @@ func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dbBoard, err := s.dbQueries.CreateBoard(r.Context(), database.CreateBoardParams{
+	dbBoard, err := s.store.CreateBoard(r.Context(), database.CreateBoardParams{
 		Name:        params.Name,
 		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
 	})

@@ -60,12 +60,13 @@ func run(ctx context.Context, cancel context.CancelFunc, httpPort int) int {
 	return 0
 }
 
-func initializeDB(dbURL string) (*database.Queries, error) {
+func initializeStore(dbURL string) (*store, error) {
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		return nil, err
 	}
-	return database.New(db), nil
+
+	return &store{Queries: database.New(db), db: db}, nil
 }
 
 func initializeLogger() *slog.Logger {

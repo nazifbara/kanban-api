@@ -9,20 +9,18 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/nazifbara/kanban-api/internal/database"
 )
 
 type contextKey string
 
 type server struct {
 	httpServer *http.Server
-	dbQueries  *database.Queries
+	store      *store
 	logger     *slog.Logger
 	cancel     context.CancelFunc
 }
 
-func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cancel context.CancelFunc) *server {
+func newServer(port int, store *store, logger *slog.Logger, cancel context.CancelFunc) *server {
 	mux := http.NewServeMux()
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -30,7 +28,7 @@ func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cance
 	}
 	s := &server{
 		httpServer: srv,
-		dbQueries:  dbQueries,
+		store:      store,
 		logger:     logger,
 		cancel:     cancel,
 	}
@@ -48,7 +46,7 @@ func newServer(port int, dbQueries *database.Queries, logger *slog.Logger, cance
 }
 
 func (s *server) handlerReset(w http.ResponseWriter, r *http.Request) {
-	s.dbQueries.TruncateBoards(r.Context())
+	s.store.TruncateBoards(r.Context())
 	w.WriteHeader(200)
 }
 

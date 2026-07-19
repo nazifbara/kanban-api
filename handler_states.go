@@ -33,12 +33,12 @@ func (s *server) handlerGetStates(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("Invalid request body"))
 	}
-	board, err := s.dbQueries.GetBoardByID(r.Context(), param.BoardID)
+	board, err := s.store.GetBoardByID(r.Context(), param.BoardID)
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	dbStates, err := s.dbQueries.GetStates(r.Context(), board.ID)
+	dbStates, err := s.store.GetStates(r.Context(), board.ID)
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
@@ -56,7 +56,7 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, err)
 		return
 	}
-	dbState, err := s.dbQueries.CreateState(
+	dbState, err := s.store.CreateState(
 		r.Context(),
 		database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
 	)
