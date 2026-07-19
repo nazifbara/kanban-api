@@ -109,6 +109,15 @@ func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error)
 	return i, err
 }
 
+const truncateBoards = `-- name: TruncateBoards :exec
+TRUNCATE TABLE boards CASCADE
+`
+
+func (q *Queries) TruncateBoards(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, truncateBoards)
+	return err
+}
+
 const updateBoard = `-- name: UpdateBoard :one
 UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description
 `

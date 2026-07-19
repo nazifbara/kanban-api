@@ -20,3 +20,6 @@ VALUES (
     NOW()
 )
 RETURNING *;
+
+-- name: TruncateBoards :exec
+TRUNCATE TABLE boards CASCADE;
