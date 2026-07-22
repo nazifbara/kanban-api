@@ -28,7 +28,7 @@ type stateBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-func (s *server) handlerGetStates(w http.ResponseWriter, r *http.Request) {
+func (s *server) handlerBoardStates(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[stateBoardID](r)
 	if err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("Invalid request body"))
