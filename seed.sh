@@ -101,11 +101,12 @@ for ((board_index = 0; board_index < ${#board_names[@]}; board_index++)); do
     printf 'Created board %d: %s\n' "$board_number" "$board_id"
 
     IFS='|' read -r -a columns <<< "${board_columns[$board_index]}"
-    for column_title in "${columns[@]}"; do
+    for ((column_index = 0; column_index < ${#columns[@]}; column_index++)); do
         column_payload=$(jq -n \
-            --arg title "$column_title" \
+            --arg title "${columns[$column_index]}" \
             --arg board_id "$board_id" \
-            '{title: $title, board_id: $board_id}')
+            --argjson position "$column_index" \
+            '{title: $title, board_id: $board_id, position: $position}')
         curl --silent --show-error --fail \
             --request POST \
             --header 'Content-Type: application/json' \

@@ -14,12 +14,11 @@ import (
 )
 
 type Board struct {
-	ID             uuid.UUID   `json:"id"`
-	Name           string      `json:"name"`
-	Description    string      `json:"description"`
-	CreatedAt      time.Time   `json:"created_at"`
-	StatePositions []uuid.UUID `json:"state_positions"`
-	UpdatedAt      time.Time   `json:"updated_at"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type BoardParam struct {
@@ -125,12 +124,11 @@ func validateBoardParams(param BoardParam) error {
 
 func dbToBoard(dbBoard database.Board) Board {
 	return Board{
-		ID:             dbBoard.ID,
-		Name:           dbBoard.Name,
-		Description:    dbBoard.Description.String,
-		CreatedAt:      dbBoard.CreatedAt,
-		UpdatedAt:      dbBoard.UpdatedAt,
-		StatePositions: dbBoard.ColumnPositions,
+		ID:          dbBoard.ID,
+		Name:        dbBoard.Name,
+		Description: dbBoard.Description.String,
+		CreatedAt:   dbBoard.CreatedAt,
+		UpdatedAt:   dbBoard.UpdatedAt,
 	}
 }
 

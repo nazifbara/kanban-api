@@ -12,23 +12,25 @@ import (
 )
 
 const createColumn = `-- name: CreateColumn :one
-INSERT INTO columns (id, title, created_at, updated_at, board_id)
+INSERT INTO columns (id, title, created_at, updated_at, board_id, position)
 VALUES (
     gen_random_uuid(),
     $1,
     NOW(),
     NOW(),
-    $2
-) RETURNING id, title, description, created_at, updated_at, board_id
+    $2,
+    $3
+) RETURNING id, title, description, created_at, updated_at, board_id, position
 `
 
 type CreateColumnParams struct {
-	Title   string
-	BoardID uuid.UUID
+	Title    string
+	BoardID  uuid.UUID
+	Position int32
 }
 
 func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Column, error) {
-	row := q.db.QueryRowContext(ctx, createColumn, arg.Title, arg.BoardID)
+	row := q.db.QueryRowContext(ctx, createColumn, arg.Title, arg.BoardID, arg.Position)
 	var i Column
 	err := row.Scan(
 		&i.ID,
@@ -37,11 +39,13 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Col
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.BoardID,
+		&i.Position,
 	)
 	return i, err
 }
 
 const deleteColumn = `-- name: DeleteColumn :exec
+
 DELETE FROM columns WHERE id = $1
 `
 
@@ -51,7 +55,7 @@ func (q *Queries) DeleteColumn(ctx context.Context, id uuid.UUID) error {
 }
 
 const getColumns = `-- name: GetColumns :many
-SELECT id, title, description, created_at, updated_at, board_id from columns WHERE board_id = $1 ORDER BY created_at DESC
+SELECT id, title, description, created_at, updated_at, board_id, position from columns WHERE board_id = $1 ORDER BY position ASC
 `
 
 func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, error) {
@@ -70,6 +74,7 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.BoardID,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -82,4 +87,18 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateColumnPosition = `-- name: UpdateColumnPosition :exec
+UPDATE columns SET position = $2 WHERE id = $1
+`
+
+type UpdateColumnPositionParams struct {
+	ID       uuid.UUID
+	Position int32
+}
+
+func (q *Queries) UpdateColumnPosition(ctx context.Context, arg UpdateColumnPositionParams) error {
+	_, err := q.db.ExecContext(ctx, updateColumnPosition, arg.ID, arg.Position)
+	return err
 }

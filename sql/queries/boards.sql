@@ -1,6 +1,3 @@
--- name: AdjustBoardPositions :one
-UPDATE boards SET column_positions = $1 WHERE id = $2 RETURNING *;
-
 -- name: UpdateBoard :one
 UPDATE boards SET name = $1 WHERE id = $2 RETURNING *;
 
