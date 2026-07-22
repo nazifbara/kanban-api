@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	utils "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
@@ -26,6 +27,20 @@ type StateParams struct {
 
 type stateBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
+}
+
+func (s *server) handlerDeleteState(w http.ResponseWriter, r *http.Request) {
+	stateID, err := utils.GetIdFromPath(r, "stateID")
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("invalid board"))
+		return
+	}
+	err = s.store.DeleteState(r.Context(), stateID)
+	if err != nil {
+		respondWith500(r.Context(), w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) handlerBoardStates(w http.ResponseWriter, r *http.Request) {

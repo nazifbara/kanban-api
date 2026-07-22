@@ -40,6 +40,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("PUT /api/boards/{boardID}", s.hanlderUpdateBoard)
 	mux.HandleFunc("POST /api/states", s.handlerCreateState)
 	mux.HandleFunc("GET /api/states", s.handlerBoardStates)
+	mux.HandleFunc("DELETE /api/states/{stateID}", s.handlerDeleteState)
 	mux.HandleFunc("POST /reset", s.handlerReset)
 
 	return s

@@ -1,3 +1,6 @@
+-- name: DeleteState :exec
+DELETE FROM states WHERE id = $1;
+
 -- name: CreateState :one
 INSERT INTO states (id, title, created_at, updated_at, board_id)
 VALUES (

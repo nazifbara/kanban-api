@@ -41,6 +41,15 @@ func (q *Queries) CreateState(ctx context.Context, arg CreateStateParams) (State
 	return i, err
 }
 
+const deleteState = `-- name: DeleteState :exec
+DELETE FROM states WHERE id = $1
+`
+
+func (q *Queries) DeleteState(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteState, id)
+	return err
+}
+
 const getStates = `-- name: GetStates :many
 SELECT id, title, description, created_at, updated_at, board_id from states WHERE board_id = $1 ORDER BY created_at DESC
 `
