@@ -65,7 +65,7 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, dbToColumnSlice(dbColumns))
 }
 
-func adjustColumnPositions(context context.Context, q *database.Queries, existingColumns []database.Column, newPosition int) error {
+func handleColumnShifts(context context.Context, q *database.Queries, existingColumns []database.Column, newPosition int) error {
 	var err error
 	for i := newPosition; i < len(existingColumns); i++ {
 		column := existingColumns[i]
@@ -103,7 +103,7 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	var dbColumn database.Column
 	s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		err = adjustColumnPositions(r.Context(), qtx, existingColumns, params.Position)
+		err = handleColumnShifts(r.Context(), qtx, existingColumns, params.Position)
 		if err != nil {
 			return err
 		}
