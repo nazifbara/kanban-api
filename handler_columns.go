@@ -11,7 +11,7 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
-type State struct {
+type Column struct {
 	ID          uuid.UUID `json:"id"`
 	Title       string    `json:"title"`
 	BoardID     uuid.UUID `json:"board_id"`
@@ -20,22 +20,22 @@ type State struct {
 	Description string    `json:"description"`
 }
 
-type StateParams struct {
+type ColumnParams struct {
 	Title   string    `json:"title"`
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-type stateBoardID struct {
+type columnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-func (s *server) handlerDeleteState(w http.ResponseWriter, r *http.Request) {
-	stateID, err := utils.GetIdFromPath(r, "stateID")
+func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
+	columnID, err := utils.GetIdFromPath(r, "columnID")
 	if err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("invalid board"))
 		return
 	}
-	err = s.store.DeleteState(r.Context(), stateID)
+	err = s.store.DeleteColumn(r.Context(), columnID)
 	if err != nil {
 		respondWith500(r.Context(), w, err)
 		return
@@ -43,8 +43,8 @@ func (s *server) handlerDeleteState(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *server) handlerBoardStates(w http.ResponseWriter, r *http.Request) {
-	param, err := decodeJSONBody[stateBoardID](r)
+func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
+	param, err := decodeJSONBody[columnBoardID](r)
 	if err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("Invalid request body"))
 	}
@@ -53,29 +53,29 @@ func (s *server) handlerBoardStates(w http.ResponseWriter, r *http.Request) {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	dbStates, err := s.store.GetStates(r.Context(), board.ID)
+	dbColumns, err := s.store.GetColumns(r.Context(), board.ID)
 	if err != nil {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, 200, dbToStateSlice(dbStates))
+	respondWithJSON(w, 200, dbToColumnSlice(dbColumns))
 }
 
-func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
-	params, err := decodeJSONBody[StateParams](r)
+func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
+	params, err := decodeJSONBody[ColumnParams](r)
 	if err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("malformed request body"))
 		return
 	}
-	if err := validateState(params); err != nil {
+	if err := validateColumn(params); err != nil {
 		respondWithError(r.Context(), w, http.StatusBadRequest, err)
 		return
 	}
-	var dbState database.State
+	var dbColumn database.Column
 	s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		dbState, err = qtx.CreateState(
+		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
-			database.CreateStateParams{BoardID: params.BoardID, Title: params.Title},
+			database.CreateColumnParams{BoardID: params.BoardID, Title: params.Title},
 		)
 		if err != nil {
 			return err
@@ -84,10 +84,10 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		dbBoard.StatePositions = append(dbBoard.StatePositions, dbState.ID)
+		dbBoard.ColumnPositions = append(dbBoard.ColumnPositions, dbColumn.ID)
 		_, err = qtx.AdjustBoardPositions(r.Context(), database.AdjustBoardPositionsParams{
-			ID:             params.BoardID,
-			StatePositions: dbBoard.StatePositions,
+			ID:              params.BoardID,
+			ColumnPositions: dbBoard.ColumnPositions,
 		})
 		if err != nil {
 			return err
@@ -99,29 +99,29 @@ func (s *server) handlerCreateState(w http.ResponseWriter, r *http.Request) {
 		respondWith500(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, dbToState(dbState))
+	respondWithJSON(w, http.StatusCreated, dbToColumn(dbColumn))
 }
 
-func dbToStateSlice(dbStates []database.State) []State {
-	states := []State{}
-	for _, dbState := range dbStates {
-		states = append(states, dbToState(dbState))
+func dbToColumnSlice(dbColumns []database.Column) []Column {
+	columns := []Column{}
+	for _, dbColumn := range dbColumns {
+		columns = append(columns, dbToColumn(dbColumn))
 	}
-	return states
+	return columns
 }
 
-func dbToState(dbState database.State) State {
-	return State{
-		ID:          dbState.ID,
-		Title:       dbState.Title,
-		CreatedAt:   dbState.CreatedAt,
-		UpdatedAt:   dbState.UpdatedAt,
-		Description: dbState.Description.String,
-		BoardID:     dbState.BoardID,
+func dbToColumn(dbColumn database.Column) Column {
+	return Column{
+		ID:          dbColumn.ID,
+		Title:       dbColumn.Title,
+		CreatedAt:   dbColumn.CreatedAt,
+		UpdatedAt:   dbColumn.UpdatedAt,
+		Description: dbColumn.Description.String,
+		BoardID:     dbColumn.BoardID,
 	}
 }
 
-func validateState(params StateParams) error {
+func validateColumn(params ColumnParams) error {
 	if params.BoardID == uuid.Nil {
 		return errors.New("body.board_id is required")
 	}

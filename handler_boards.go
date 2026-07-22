@@ -130,7 +130,7 @@ func dbToBoard(dbBoard database.Board) Board {
 		Description:    dbBoard.Description.String,
 		CreatedAt:      dbBoard.CreatedAt,
 		UpdatedAt:      dbBoard.UpdatedAt,
-		StatePositions: dbBoard.StatePositions,
+		StatePositions: dbBoard.ColumnPositions,
 	}
 }
 

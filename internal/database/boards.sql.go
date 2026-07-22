@@ -14,16 +14,16 @@ import (
 )
 
 const adjustBoardPositions = `-- name: AdjustBoardPositions :one
-UPDATE boards SET state_positions = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description, state_positions
+UPDATE boards SET column_positions = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description, column_positions
 `
 
 type AdjustBoardPositionsParams struct {
-	StatePositions []uuid.UUID
-	ID             uuid.UUID
+	ColumnPositions []uuid.UUID
+	ID              uuid.UUID
 }
 
 func (q *Queries) AdjustBoardPositions(ctx context.Context, arg AdjustBoardPositionsParams) (Board, error) {
-	row := q.db.QueryRowContext(ctx, adjustBoardPositions, pq.Array(arg.StatePositions), arg.ID)
+	row := q.db.QueryRowContext(ctx, adjustBoardPositions, pq.Array(arg.ColumnPositions), arg.ID)
 	var i Board
 	err := row.Scan(
 		&i.ID,
@@ -31,7 +31,7 @@ func (q *Queries) AdjustBoardPositions(ctx context.Context, arg AdjustBoardPosit
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
-		pq.Array(&i.StatePositions),
+		pq.Array(&i.ColumnPositions),
 	)
 	return i, err
 }
@@ -45,7 +45,7 @@ VALUES (
     NOw(),
     NOW()
 )
-RETURNING id, name, created_at, updated_at, description, state_positions
+RETURNING id, name, created_at, updated_at, description, column_positions
 `
 
 type CreateBoardParams struct {
@@ -62,13 +62,13 @@ func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
-		pq.Array(&i.StatePositions),
+		pq.Array(&i.ColumnPositions),
 	)
 	return i, err
 }
 
 const deleteBoard = `-- name: DeleteBoard :one
-DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at, description, state_positions
+DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at, description, column_positions
 `
 
 func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -80,13 +80,13 @@ func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
-		pq.Array(&i.StatePositions),
+		pq.Array(&i.ColumnPositions),
 	)
 	return i, err
 }
 
 const getAllBoards = `-- name: GetAllBoards :many
-SELECT id, name, created_at, updated_at, description, state_positions FROM boards ORDER BY created_at DESC
+SELECT id, name, created_at, updated_at, description, column_positions FROM boards ORDER BY created_at DESC
 `
 
 func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
@@ -104,7 +104,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Description,
-			pq.Array(&i.StatePositions),
+			pq.Array(&i.ColumnPositions),
 		); err != nil {
 			return nil, err
 		}
@@ -120,7 +120,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 }
 
 const getBoardByID = `-- name: GetBoardByID :one
-SELECT id, name, created_at, updated_at, description, state_positions FROM boards WHERE id = $1
+SELECT id, name, created_at, updated_at, description, column_positions FROM boards WHERE id = $1
 `
 
 func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -132,7 +132,7 @@ func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
-		pq.Array(&i.StatePositions),
+		pq.Array(&i.ColumnPositions),
 	)
 	return i, err
 }
@@ -147,7 +147,7 @@ func (q *Queries) TruncateBoards(ctx context.Context) error {
 }
 
 const updateBoard = `-- name: UpdateBoard :one
-UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description, state_positions
+UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description, column_positions
 `
 
 type UpdateBoardParams struct {
@@ -164,7 +164,7 @@ func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (Board
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
-		pq.Array(&i.StatePositions),
+		pq.Array(&i.ColumnPositions),
 	)
 	return i, err
 }

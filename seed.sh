@@ -17,7 +17,7 @@ board_descriptions=(
     "Manage recurring support improvements and high-priority customer issues for the operations team."
     "Move engineering candidates through sourcing, interviews, and the final offer process."
 )
-board_states=(
+board_columns=(
     "Ideas|Planned|In progress|Design review|QA|Released"
     "Backlog|Content|Design|Development|Stakeholder review|Published"
     "New|Triaged|Investigating|Waiting on customer|Ready to close|Closed"
@@ -28,7 +28,7 @@ usage() {
     cat <<'EOF'
 Usage: ./seed.sh [--reset]
 
-Creates sample boards and states through the HTTP API.
+Creates sample Kanban boards and columns through the HTTP API.
 
 Environment variable:
     BASE_URL            API base URL (default: http://localhost:8080)
@@ -84,7 +84,7 @@ if [[ "$RESET_DATABASE" == true ]]; then
     curl --silent --show-error --fail --request POST "$BASE_URL/reset" >/dev/null
 fi
 
-total_states=0
+total_columns=0
 for ((board_index = 0; board_index < ${#board_names[@]}; board_index++)); do
     board_number=$((board_index + 1))
     board_payload=$(jq -n \
@@ -100,21 +100,21 @@ for ((board_index = 0; board_index < ${#board_names[@]}; board_index++)); do
 
     printf 'Created board %d: %s\n' "$board_number" "$board_id"
 
-    IFS='|' read -r -a states <<< "${board_states[$board_index]}"
-    for state_title in "${states[@]}"; do
-        state_payload=$(jq -n \
-            --arg title "$state_title" \
+    IFS='|' read -r -a columns <<< "${board_columns[$board_index]}"
+    for column_title in "${columns[@]}"; do
+        column_payload=$(jq -n \
+            --arg title "$column_title" \
             --arg board_id "$board_id" \
             '{title: $title, board_id: $board_id}')
         curl --silent --show-error --fail \
             --request POST \
             --header 'Content-Type: application/json' \
-            --data "$state_payload" \
-            "$BASE_URL/api/states" >/dev/null
-        total_states=$((total_states + 1))
+            --data "$column_payload" \
+            "$BASE_URL/api/columns" >/dev/null
+        total_columns=$((total_columns + 1))
     done
 
-    printf '  Created %d workflow states\n' "${#states[@]}"
+    printf '  Created %d Kanban columns\n' "${#columns[@]}"
 done
 
-printf 'Seed complete: %d boards, %d states\n' "${#board_names[@]}" "$total_states"
+printf 'Seed complete: %d boards, %d columns\n' "${#board_names[@]}" "$total_columns"
