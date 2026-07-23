@@ -35,35 +35,23 @@ type PatchColumnParams struct {
 	Description *string `json:"description"`
 	Position    *int    `json:"position"`
 }
-type UpdateColumnParams struct {
-	Title       string `json:"title"`
-	Position    int    `json:"position"`
-	Description string `json:"description"`
-}
 
 type columnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-func fillPatch(patchParams PatchColumnParams, oldColumn database.Column) (UpdateColumnParams, error) {
-	var param UpdateColumnParams
-	var err []error
-	if patchParams.Title == nil {
-		param.Title = oldColumn.Title
-	} else {
-		param.Title = *patchParams.Title
+func preparePatch(params PatchColumnParams) database.UpdateColumnParams {
+	var patch database.UpdateColumnParams
+	if params.Title != nil {
+		patch.Title = sql.NullString{String: *params.Title, Valid: true}
 	}
-	if patchParams.Description == nil {
-		param.Description = oldColumn.Description.String
-	} else {
-		param.Description = *patchParams.Description
+	if params.Description != nil {
+		patch.Description = sql.NullString{String: *params.Description, Valid: true}
 	}
-	if patchParams.Position == nil {
-		param.Position = int(oldColumn.Position)
-	} else {
-		param.Position = *patchParams.Position
+	if params.Position != nil {
+		patch.Position = sql.NullInt32{Int32: int32(*params.Position), Valid: true}
 	}
-	return param, errors.Join(err...)
+	return patch
 }
 
 func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +61,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	patchParams, err := decodeJSONBody[PatchColumnParams](r)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("malformed request body"))
 		return
 	}
 	oldColumn, err := s.store.GetColumnById(r.Context(), columnID)
@@ -81,24 +69,16 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	param, err := fillPatch(patchParams, oldColumn)
-	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, err)
-		return
-	}
+	patch := preparePatch(patchParams)
+	patch.ID = columnID
 	boardColumns, err := s.store.GetColumns(r.Context(), oldColumn.BoardID)
-	if param.Position >= len(boardColumns) || param.Position < 0 {
+	if patch.Position.Valid && (int(patch.Position.Int32) >= len(boardColumns) || patch.Position.Int32 < 0) {
 		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("column position out of range [0, %d]", len(boardColumns)))
 		return
 	}
 	var column database.Column
-	s.store.execTx(r.Context(), func(q *database.Queries) error {
-		column, err = q.UpdateColumn(r.Context(), database.UpdateColumnParams{
-			ID:          columnID,
-			Description: sql.NullString{String: param.Description, Valid: true},
-			Title:       param.Title,
-			Position:    int32(param.Position),
-		})
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		column, err = q.UpdateColumn(r.Context(), patch)
 		if err != nil {
 			return err
 		}
@@ -108,6 +88,10 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
+	if err != nil {
+		respondWith500(r.Context(), w, err)
+		return
+	}
 	respondWithJSON(w, http.StatusOK, dbToColumn(column))
 }
 

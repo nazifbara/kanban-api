@@ -3,8 +3,12 @@ SELECT * FROM columns WHERE id = $1;
 
 -- name: UpdateColumn :one
 UPDATE columns
-SET position = $1, title = $2, description = $3, updated_at = NOW() 
-WHERE id = $4
+SET 
+    position = COALESCE(sqlc.narg(position), position),
+    title = COALESCE(sqlc.narg(title), title),
+    description = COALESCE(sqlc.narg(description), description),
+    updated_at = NOW() 
+WHERE id = $1
 RETURNING *;
 
 -- name: UpdateColumnPosition :exec

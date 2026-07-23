@@ -110,24 +110,28 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 
 const updateColumn = `-- name: UpdateColumn :one
 UPDATE columns
-SET position = $1, title = $2, description = $3 
-WHERE id = $4
+SET 
+    position = COALESCE($2, position),
+    title = COALESCE($3, title),
+    description = COALESCE($4, description),
+    updated_at = NOW() 
+WHERE id = $1
 RETURNING id, title, description, created_at, updated_at, board_id, position
 `
 
 type UpdateColumnParams struct {
-	Position    int32
-	Title       string
-	Description sql.NullString
 	ID          uuid.UUID
+	Position    sql.NullInt32
+	Title       sql.NullString
+	Description sql.NullString
 }
 
 func (q *Queries) UpdateColumn(ctx context.Context, arg UpdateColumnParams) (Column, error) {
 	row := q.db.QueryRowContext(ctx, updateColumn,
+		arg.ID,
 		arg.Position,
 		arg.Title,
 		arg.Description,
-		arg.ID,
 	)
 	var i Column
 	err := row.Scan(
