@@ -1,8 +1,16 @@
+-- name: GetColumnById :one
+SELECT * FROM columns WHERE id = $1;
+
+-- name: UpdateColumn :one
+UPDATE columns
+SET position = $1, title = $2, description = $3, updated_at = NOW() 
+WHERE id = $4
+RETURNING *;
+
 -- name: UpdateColumnPosition :exec
 UPDATE columns SET position = $2 WHERE id = $1;
 
 -- name: DeleteColumn :exec
-
 DELETE FROM columns WHERE id = $1;
 
 -- name: CreateColumn :one

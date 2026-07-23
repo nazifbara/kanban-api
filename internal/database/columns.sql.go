@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -45,13 +46,31 @@ func (q *Queries) CreateColumn(ctx context.Context, arg CreateColumnParams) (Col
 }
 
 const deleteColumn = `-- name: DeleteColumn :exec
-
 DELETE FROM columns WHERE id = $1
 `
 
 func (q *Queries) DeleteColumn(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteColumn, id)
 	return err
+}
+
+const getColumnById = `-- name: GetColumnById :one
+SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1
+`
+
+func (q *Queries) GetColumnById(ctx context.Context, id uuid.UUID) (Column, error) {
+	row := q.db.QueryRowContext(ctx, getColumnById, id)
+	var i Column
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BoardID,
+		&i.Position,
+	)
+	return i, err
 }
 
 const getColumns = `-- name: GetColumns :many
@@ -87,6 +106,40 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateColumn = `-- name: UpdateColumn :one
+UPDATE columns
+SET position = $1, title = $2, description = $3 
+WHERE id = $4
+RETURNING id, title, description, created_at, updated_at, board_id, position
+`
+
+type UpdateColumnParams struct {
+	Position    int32
+	Title       string
+	Description sql.NullString
+	ID          uuid.UUID
+}
+
+func (q *Queries) UpdateColumn(ctx context.Context, arg UpdateColumnParams) (Column, error) {
+	row := q.db.QueryRowContext(ctx, updateColumn,
+		arg.Position,
+		arg.Title,
+		arg.Description,
+		arg.ID,
+	)
+	var i Column
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BoardID,
+		&i.Position,
+	)
+	return i, err
 }
 
 const updateColumnPosition = `-- name: UpdateColumnPosition :exec

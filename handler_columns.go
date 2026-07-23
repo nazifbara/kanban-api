@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -23,13 +25,90 @@ type Column struct {
 }
 
 type ColumnParams struct {
-	Title    string    `json:"title"`
-	BoardID  uuid.UUID `json:"board_id"`
-	Position int       `json:"position"`
+	Title       string    `json:"title"`
+	BoardID     uuid.UUID `json:"board_id"`
+	Position    int       `json:"position"`
+	Description string    `json:"description"`
+}
+type PatchColumnParams struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+	Position    *int    `json:"position"`
+}
+type UpdateColumnParams struct {
+	Title       string `json:"title"`
+	Position    int    `json:"position"`
+	Description string `json:"description"`
 }
 
 type columnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
+}
+
+func fillPatch(patchParams PatchColumnParams, oldColumn database.Column) (UpdateColumnParams, error) {
+	var param UpdateColumnParams
+	var err []error
+	if patchParams.Title == nil {
+		param.Title = oldColumn.Title
+	} else {
+		param.Title = *patchParams.Title
+	}
+	if patchParams.Description == nil {
+		param.Description = oldColumn.Description.String
+	} else {
+		param.Description = *patchParams.Description
+	}
+	if patchParams.Position == nil {
+		param.Position = int(oldColumn.Position)
+	} else {
+		param.Position = *patchParams.Position
+	}
+	return param, errors.Join(err...)
+}
+
+func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
+	columnID, err := utils.GetIdFromPath(r, "columnID")
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid column ID"))
+	}
+	patchParams, err := decodeJSONBody[PatchColumnParams](r)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	oldColumn, err := s.store.GetColumnById(r.Context(), columnID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	param, err := fillPatch(patchParams, oldColumn)
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		return
+	}
+	boardColumns, err := s.store.GetColumns(r.Context(), oldColumn.BoardID)
+	if param.Position >= len(boardColumns) || param.Position < 0 {
+		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("column position out of range [0, %d]", len(boardColumns)))
+		return
+	}
+	var column database.Column
+	s.store.execTx(r.Context(), func(q *database.Queries) error {
+		column, err = q.UpdateColumn(r.Context(), database.UpdateColumnParams{
+			ID:          columnID,
+			Description: sql.NullString{String: param.Description, Valid: true},
+			Title:       param.Title,
+			Position:    int32(param.Position),
+		})
+		if err != nil {
+			return err
+		}
+		err = positionColumn(r.Context(), q, boardColumns, column)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	respondWithJSON(w, http.StatusOK, dbToColumn(column))
 }
 
 func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
@@ -65,17 +144,38 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, 200, dbToColumnSlice(dbColumns))
 }
 
-func handleColumnShifts(context context.Context, q *database.Queries, existingColumns []database.Column, newPosition int) error {
+func positionColumn(context context.Context, q *database.Queries, boardColumns []database.Column, column database.Column) error {
+	oldPosition := slices.IndexFunc(boardColumns, func(c database.Column) bool {
+		return c.ID == column.ID
+	})
+	stopIdx := len(boardColumns)
+	if oldPosition != -1 {
+		stopIdx = oldPosition
+	}
 	var err error
-	for i := newPosition; i < len(existingColumns); i++ {
-		column := existingColumns[i]
-		column.Position++
-		err = q.UpdateColumnPosition(context, database.UpdateColumnPositionParams{
-			ID:       column.ID,
-			Position: column.Position,
-		})
-		if err != nil {
-			break
+	if oldPosition < int(column.Position) {
+		for i := int(column.Position); i > stopIdx; i-- {
+			column := boardColumns[i]
+			column.Position--
+			err = q.UpdateColumnPosition(context, database.UpdateColumnPositionParams{
+				ID:       column.ID,
+				Position: column.Position,
+			})
+			if err != nil {
+				break
+			}
+		}
+	} else {
+		for i := int(column.Position); i < stopIdx; i++ {
+			column := boardColumns[i]
+			column.Position++
+			err = q.UpdateColumnPosition(context, database.UpdateColumnPositionParams{
+				ID:       column.ID,
+				Position: column.Position,
+			})
+			if err != nil {
+				break
+			}
 		}
 	}
 	return err
@@ -103,10 +203,6 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 	}
 	var dbColumn database.Column
 	s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		err = handleColumnShifts(r.Context(), qtx, existingColumns, params.Position)
-		if err != nil {
-			return err
-		}
 		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
 			database.CreateColumnParams{
@@ -115,6 +211,10 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 				Position: int32(params.Position),
 			},
 		)
+		if err != nil {
+			return err
+		}
+		err = positionColumn(r.Context(), qtx, existingColumns, dbColumn)
 		if err != nil {
 			return err
 		}

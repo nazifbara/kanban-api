@@ -41,8 +41,8 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("POST /api/columns", s.handlerCreateColumn)
 	mux.HandleFunc("GET /api/columns", s.handlerBoardColumns)
 	mux.HandleFunc("DELETE /api/columns/{columnID}", s.handlerDeleteColumn)
+	mux.HandleFunc("PATCH /api/columns/{columnID}", s.handlerPatchColumn)
 	mux.HandleFunc("POST /reset", s.handlerReset)
-
 	return s
 }
 
