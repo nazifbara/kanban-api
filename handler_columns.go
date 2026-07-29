@@ -54,6 +54,83 @@ func preparePatch(params PatchColumnParams) database.UpdateColumnParams {
 	return patch
 }
 
+type ColumnPositionsParams struct {
+	BoardID   uuid.UUID   `json:"board_id"`
+	Positions []uuid.UUID `json:"positions"`
+}
+
+func validateColumnPositionsParams(params ColumnPositionsParams) error {
+	var err []error
+	if params.BoardID == uuid.Nil {
+		err = append(err, errors.New("body.board_id is required"))
+	}
+	if len(params.Positions) == 0 {
+		err = append(err, errors.New("body.positions can't be empty"))
+	}
+	m := make(map[string]int)
+	for _, id := range params.Positions {
+		if m[id.String()] == 1 {
+			err = append(err, errors.New("body.positions contains duplicated ids"))
+			break
+		}
+		m[id.String()]++
+	}
+	return errors.Join(err...)
+}
+
+func (s *server) handlerUpdateColumnPositions(w http.ResponseWriter, r *http.Request) {
+	params, err := decodeJSONBody[ColumnPositionsParams](r)
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("malformed request body"))
+		return
+	}
+	if err := validateColumnPositionsParams(params); err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		return
+	}
+	_, err = s.store.GetBoardByID(r.Context(), params.BoardID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	boardColumns, err := s.store.GetColumns(r.Context(), params.BoardID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	if len(boardColumns) != len(params.Positions) {
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("positions don't match board columns count"))
+		return
+	}
+
+	for _, columnID := range params.Positions {
+		if !slices.ContainsFunc(boardColumns, func(c database.Column) bool { return c.ID == columnID }) {
+			respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("at least one column doesn't belong to the board"))
+			return
+		}
+	}
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		for position, columnID := range params.Positions {
+			if err := q.UpdateColumnPosition(r.Context(), database.UpdateColumnPositionParams{ID: columnID, Position: int32(position)}); err != nil {
+				return err
+			}
+			oldPosition := slices.IndexFunc(boardColumns, func(c database.Column) bool { return c.ID == columnID })
+			if oldPosition == -1 {
+				return errors.New("can't find column old position")
+			}
+			boardColumns[oldPosition].Position = int32(position)
+			boardColumns[oldPosition].UpdatedAt = time.Now()
+		}
+		return nil
+	})
+	if err != nil {
+		respondWithError(r.Context(), w, 400, err)
+		return
+	}
+	slices.SortFunc(boardColumns, func(a, b database.Column) int { return int(a.Position - b.Position) })
+	respondWithJSON(w, http.StatusOK, dbToColumnSlice(boardColumns))
+}
+
 func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 	columnID, err := utils.GetIdFromPath(r, "columnID")
 	if err != nil {
