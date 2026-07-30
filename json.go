@@ -45,13 +45,17 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, code int, err 
 	errs := []error{err}
 	codesToText := []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusNotFound}
 	type respondBody struct {
-		Error string `json:"error"`
+		Errors []string `json:"errors"`
 	}
 	var response respondBody
 	if slices.Contains(codesToText, code) {
-		response.Error = http.StatusText(code)
+		response.Errors = append(response.Errors, http.StatusText(code))
+	} else if merr, ok := errors.AsType[multiErr](err); ok {
+		for _, err := range merr.Unwrap() {
+			response.Errors = append(response.Errors, err.Error())
+		}
 	} else {
-		response.Error = err.Error()
+		response.Errors = append(response.Errors, err.Error())
 	}
 	data, err := json.Marshal(response)
 	if err != nil {
