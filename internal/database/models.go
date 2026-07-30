@@ -28,3 +28,14 @@ type Column struct {
 	BoardID     uuid.UUID
 	Position    int32
 }
+
+type Task struct {
+	ID          uuid.UUID
+	BoardID     uuid.UUID
+	ColumnID    uuid.UUID
+	Title       string
+	Description sql.NullString
+	Position    int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}

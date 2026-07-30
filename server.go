@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var malformedBodyErr error = errors.New("malformed request body")
+
 type contextKey string
 
 type server struct {
@@ -43,6 +45,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("DELETE /api/columns/{columnID}", s.handlerDeleteColumn)
 	mux.HandleFunc("PATCH /api/columns/{columnID}", s.handlerPatchColumn)
 	mux.HandleFunc("PATCH /api/columns/position", s.handlerUpdateColumnPositions)
+	mux.HandleFunc("POST /api/tasks", s.handlerCreateTask)
 	mux.HandleFunc("POST /reset", s.handlerReset)
 	return s
 }
