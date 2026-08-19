@@ -46,6 +46,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("PATCH /api/columns/{columnID}", s.handlerPatchColumn)
 	mux.HandleFunc("PATCH /api/columns/position", s.handlerUpdateColumnPositions)
 	mux.HandleFunc("POST /api/tasks", s.handlerCreateTask)
+	mux.HandleFunc("GET /api/columns/{columnID}/tasks", s.handlerColumnTasks)
 	mux.HandleFunc("POST /reset", s.handlerReset)
 	return s
 }
