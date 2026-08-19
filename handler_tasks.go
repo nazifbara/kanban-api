@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
+	utils "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
@@ -43,6 +44,38 @@ func validateCreateTaskParam(param CreateTaskParam) error {
 		err = append(err, errors.New("body.title cannot excedd 255 characters"))
 	}
 	return errors.Join(err...)
+}
+
+func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
+	columnID, err := utils.GetIdFromPath(r, "columnID")
+	if err != nil {
+		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		return
+	}
+	column, err := s.store.GetColumnById(r.Context(), columnID)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+		return
+	}
+	tasks, err := s.store.GetColumnTasks(
+		r.Context(),
+		database.GetColumnTasksParams{
+			ColumnID: columnID,
+			BoardID:  column.BoardID,
+		},
+	)
+	if err != nil {
+		respondFromDBErr(r.Context(), w, err)
+	}
+	respondWithJSON(w, http.StatusOK, dbToTaskSlice(tasks))
+}
+
+func dbToTaskSlice(dbTasks []database.Task) []Task {
+	var tasks []Task
+	for _, dbTask := range dbTasks {
+		tasks = append(tasks, dbToTask(dbTask))
+	}
+	return tasks
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
