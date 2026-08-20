@@ -34,9 +34,9 @@ type CreateTaskParam struct {
 
 type UpdateTaskParam struct {
 	ColumnID    *uuid.UUID `json:"column_id"`
-	Title       *string
-	Description *string `json:"description"`
-	Position    *int32  `json:"position"`
+	Title       *string    `json:"title"`
+	Description *string    `json:"description"`
+	Position    *int32     `json:"position"`
 }
 
 func prepareTaskPatch(param UpdateTaskParam) (database.UpdateTaskParams, error) {
