@@ -58,16 +58,11 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 }
 
 const getColumnTasks = `-- name: GetColumnTasks :many
-SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE column_id = $1 AND board_id = $2
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE column_id = $1 ORDER BY position ASC
 `
 
-type GetColumnTasksParams struct {
-	ColumnID uuid.UUID
-	BoardID  uuid.UUID
-}
-
-func (q *Queries) GetColumnTasks(ctx context.Context, arg GetColumnTasksParams) ([]Task, error) {
-	rows, err := q.db.QueryContext(ctx, getColumnTasks, arg.ColumnID, arg.BoardID)
+func (q *Queries) GetColumnTasks(ctx context.Context, columnID uuid.UUID) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, getColumnTasks, columnID)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +91,68 @@ func (q *Queries) GetColumnTasks(ctx context.Context, arg GetColumnTasksParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const getTask = `-- name: GetTask :one
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE id = $1
+`
+
+func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
+	row := q.db.QueryRowContext(ctx, getTask, id)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateTask = `-- name: UpdateTask :one
+UPDATE tasks
+SET
+    column_id = COALESCE($2, column_id),
+    title = COALESCE($3, title),
+    description = COALESCE($4, description),
+    position = COALESCE($5, position),
+    updated_at = NOW()
+where id = $1
+RETURNING id, board_id, column_id, title, description, position, created_at, updated_at
+`
+
+type UpdateTaskParams struct {
+	ID          uuid.UUID
+	ColumnID    uuid.NullUUID
+	Title       sql.NullString
+	Description sql.NullString
+	Position    sql.NullInt32
+}
+
+func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error) {
+	row := q.db.QueryRowContext(ctx, updateTask,
+		arg.ID,
+		arg.ColumnID,
+		arg.Title,
+		arg.Description,
+		arg.Position,
+	)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateTaskPosition = `-- name: UpdateTaskPosition :exec
