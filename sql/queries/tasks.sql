@@ -1,3 +1,17 @@
+-- name: GetTask :one
+SELECT * FROM tasks WHERE id = $1;
+
+-- name: UpdateTask :one 
+UPDATE tasks
+SET
+    column_id = COALESCE(sqlc.narg(column_id), column_id),
+    title = COALESCE(sqlc.narg(title), title),
+    description = COALESCE(sqlc.narg(description), description),
+    position = COALESCE(sqlc.narg(position), position),
+    updated_at = NOW()
+where id = $1
+RETURNING *;
+
 -- name: CreateTask :one
 INSERT INTO tasks (id, board_id, column_id, title, description, position, created_at, updated_at)
 VALUES (
@@ -13,7 +27,7 @@ VALUES (
 RETURNING *;
 
 -- name: GetColumnTasks :many
-SELECT * FROM tasks WHERE column_id = $1 AND board_id = $2;
+SELECT * FROM tasks WHERE column_id = $1 ORDER BY position ASC;
 
 -- name: UpdateTaskPosition :exec
 UPDATE tasks SET position = $2 WHERE id = $1;

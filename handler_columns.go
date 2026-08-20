@@ -40,7 +40,7 @@ type columnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
-func preparePatch(params PatchColumnParams) database.UpdateColumnParams {
+func prepareColumnPatch(params PatchColumnParams) database.UpdateColumnParams {
 	var patch database.UpdateColumnParams
 	if params.Title != nil {
 		patch.Title = sql.NullString{String: *params.Title, Valid: true}
@@ -146,7 +146,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
-	patch := preparePatch(patchParams)
+	patch := prepareColumnPatch(patchParams)
 	patch.ID = columnID
 	boardColumns, err := s.store.GetColumns(r.Context(), oldColumn.BoardID)
 	if patch.Position.Valid && (int(patch.Position.Int32) >= len(boardColumns) || patch.Position.Int32 < 0) {
