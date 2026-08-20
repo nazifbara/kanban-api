@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"slices"
 	"time"
@@ -87,7 +86,10 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	changeColumn := false
-	columnId := task.ColumnID
+	newColumnId := task.ColumnID
+	newPosition := task.Position
+	var destinationTasks []database.Task
+
 	if patch.ColumnID.Valid {
 		column, err := s.store.GetColumnById(r.Context(), patch.ColumnID.UUID)
 		if err != nil {
@@ -99,20 +101,33 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		changeColumn = patch.ColumnID.UUID != task.ColumnID
-		columnId = patch.ColumnID.UUID
+		newColumnId = patch.ColumnID.UUID
 	}
-	newPosition := 0
-	var columnTasks []database.Task
-	if patch.Position.Valid {
-		columnTasks, err = s.store.GetColumnTasks(
+	if changeColumn {
+		destinationTasks, err = s.store.GetColumnTasks(
 			r.Context(),
-			columnId,
+			newColumnId,
 		)
 		if err != nil {
 			respondFromDBErr(r.Context(), w, err)
 			return
 		}
-		numOfTasks := len(columnTasks)
+		if !patch.Position.Valid {
+			newPosition = int32(len(destinationTasks))
+		}
+	}
+	if patch.Position.Valid {
+		if destinationTasks == nil {
+			destinationTasks, err = s.store.GetColumnTasks(
+				r.Context(),
+				task.ColumnID,
+			)
+			if err != nil {
+				respondFromDBErr(r.Context(), w, err)
+				return
+			}
+		}
+		numOfTasks := len(destinationTasks)
 		if numOfTasks == 0 && patch.Position.Int32 > 0 {
 			respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("task position out of range [0, 0]"))
 			return
@@ -120,16 +135,16 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 			respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("task position out of range [0, %d]", numOfTasks-1))
 			return
 		}
-		newPosition = int(patch.Position.Int32)
+		newPosition = int32(patch.Position.Int32)
 	}
 
 	var updatedTask database.Task
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
 		var err error
 		if changeColumn {
-			err = changeTaskColumn(r.Context(), q, task, columnTasks, patch.ColumnID.UUID, newPosition)
-		} else if newPosition != int(task.Position) {
-			err = positionTask(r.Context(), q, columnTasks, task, newPosition)
+			err = changeTaskColumn(r.Context(), q, task, destinationTasks, patch.ColumnID.UUID, int(newPosition))
+		} else if newPosition != int32(task.Position) {
+			err = positionTask(r.Context(), q, destinationTasks, task, int(newPosition))
 		}
 
 		if err != nil {
@@ -173,7 +188,6 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		}
 	}
 	task.Position = int32(newPosition)
-	log.Println(newColumnTasks)
 	err = positionTask(ctx, q, newColumnTasks, task, newPosition)
 	if err != nil {
 		return err
