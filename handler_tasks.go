@@ -173,7 +173,7 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		return t.ID == task.ID
 	})
 	if taskIndex == -1 {
-		return errors.New("Task not found in old column")
+		return errors.New("task not found in old column")
 	}
 	for i := taskIndex + 1; i < len(oldColumnTasks); i++ {
 		t := oldColumnTasks[i]
@@ -191,17 +191,17 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 }
 
 func validateCreateTaskParam(param CreateTaskParam) error {
-	var err []error
+	var errs []error
 	if param.ColumnID == uuid.Nil {
-		err = append(err, errors.New("body.column_id is required"))
+		errs = append(errs, errors.New("body.column_id is required"))
 	}
 	if param.Title == "" {
-		err = append(err, errors.New("body.title is required"))
+		errs = append(errs, errors.New("body.title is required"))
 	}
 	if utf8.RuneCountInString(param.Title) > 255 {
-		err = append(err, errors.New("body.title cannot excedd 255 characters"))
+		errs = append(errs, errors.New("body.title cannot exceed 255 characters"))
 	}
-	return errors.Join(err...)
+	return errors.Join(errs...)
 }
 
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
