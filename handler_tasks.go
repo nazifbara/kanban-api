@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -127,12 +126,8 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		numOfTasks := len(destinationTasks)
-		if numOfTasks == 0 && patch.Position.Int32 > 0 {
-			respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("task position out of range [0, 0]"))
-			return
-		} else if numOfTasks > 0 && (int(patch.Position.Int32) >= numOfTasks || patch.Position.Int32 < 0) {
-			respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("task position out of range [0, %d]", numOfTasks-1))
+		if !utils.IsPositionInRange(int(patch.Position.Int32), len(destinationTasks), changeColumn) {
+			respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("position out of range"))
 			return
 		}
 		newPosition = int32(patch.Position.Int32)
@@ -259,6 +254,12 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		respondFromDBErr(r.Context(), w, err)
 		return
 	}
+
+	if !utils.IsPositionInRange(params.Position, len(existingTasks), true) {
+		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("position out of range"))
+		return
+	}
+
 	var dbTask database.Task
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
 		dbTask, err = qtx.CreateTask(
