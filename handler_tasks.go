@@ -227,7 +227,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func dbToTaskSlice(dbTasks []database.Task) []Task {
-	var tasks []Task
+	tasks := []Task{}
 	for _, dbTask := range dbTasks {
 		tasks = append(tasks, dbToTask(dbTask))
 	}
