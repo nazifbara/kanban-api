@@ -93,6 +93,42 @@ func (q *Queries) GetColumnTasks(ctx context.Context, columnID uuid.UUID) ([]Tas
 	return items, nil
 }
 
+const getColumnTasksForUpdate = `-- name: GetColumnTasksForUpdate :many
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE column_id = $1 ORDER BY position ASC FOR UPDATE
+`
+
+func (q *Queries) GetColumnTasksForUpdate(ctx context.Context, columnID uuid.UUID) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, getColumnTasksForUpdate, columnID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.BoardID,
+			&i.ColumnID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTask = `-- name: GetTask :one
 SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE id = $1
 `

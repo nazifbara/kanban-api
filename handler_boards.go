@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	utils "github.com/nazifbara/kanban-api/internal"
+	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
@@ -30,21 +30,21 @@ func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
-		respondWithError(r.Context(), w, http.StatusBadRequest, fmt.Errorf("invalid board id"))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("malformed request body"))
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	if params.Name == "" {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("body.name is required"))
+		respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "body.name is required"))
 		return
 	}
 	dbBoard, err := s.store.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	respondWithJSON(w, 201, dbToBoard(dbBoard))
@@ -54,12 +54,12 @@ func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
 		log.Printf("invalid board id: %v", err)
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	_, err = s.store.DeleteBoard(r.Context(), boardID)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -68,12 +68,12 @@ func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid board id"))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	dbBoard, err := s.store.GetBoardByID(r.Context(), boardID)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	respondWithJSON(w, http.StatusOK, dbToBoard(dbBoard))
@@ -82,7 +82,7 @@ func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 	dbBoards, err := s.store.GetAllBoards(r.Context())
 	if err != nil {
-		respondWith500(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	boards := dbToBoardSlice(dbBoards)
@@ -93,12 +93,12 @@ func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid request body"))
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	if err := validateBoardParams(params); err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
@@ -107,7 +107,7 @@ func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
 	})
 	if err != nil {
-		respondWith500(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 

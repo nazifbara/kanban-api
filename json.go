@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"slices"
 
+	"github.com/nazifbara/kanban-api/internal/apierrors"
 	pkgerr "github.com/pkg/errors"
 )
 
@@ -19,14 +19,6 @@ func decodeJSONBody[T any](r *http.Request) (T, error) {
 		return params, err
 	}
 	return params, nil
-}
-
-func respondFromDBErr(ctx context.Context, w http.ResponseWriter, err error) {
-	if errors.Is(err, sql.ErrNoRows) {
-		respondWithError(ctx, w, http.StatusNotFound, err)
-		return
-	}
-	respondWith500(ctx, w, err)
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload any) {
@@ -41,15 +33,19 @@ func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	w.Write(data)
 }
 
-func respondWithError(ctx context.Context, w http.ResponseWriter, code int, err error) {
+func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
+	statusCode := 500
+	if apiErr, ok := err.(apierrors.APIErr); ok {
+		statusCode = apiErr.StatusCode
+	}
 	errs := []error{err}
 	codesToText := []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusNotFound}
 	type respondBody struct {
 		Errors []string `json:"errors"`
 	}
 	var response respondBody
-	if slices.Contains(codesToText, code) {
-		response.Errors = append(response.Errors, http.StatusText(code))
+	if slices.Contains(codesToText, statusCode) {
+		response.Errors = append(response.Errors, http.StatusText(statusCode))
 	} else if merr, ok := errors.AsType[multiErr](err); ok {
 		for _, err := range merr.Unwrap() {
 			response.Errors = append(response.Errors, err.Error())
@@ -67,10 +63,6 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, code int, err 
 		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
+	w.WriteHeader(statusCode)
 	w.Write(data)
-}
-
-func respondWith500(ctx context.Context, w http.ResponseWriter, err error) {
-	respondWithError(ctx, w, 500, err)
 }

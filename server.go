@@ -9,9 +9,11 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/nazifbara/kanban-api/internal/apierrors"
 )
 
-var malformedBodyErr error = errors.New("malformed request body")
+var malformedBodyErr error = apierrors.New(http.StatusBadRequest, "malformed request body")
 
 type contextKey string
 
