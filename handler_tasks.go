@@ -102,13 +102,14 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		}
 		err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
 			var err error
+			var column database.Column
 			if newColumnId != task.ColumnID {
-				column, err := s.store.GetColumnForShare(r.Context(), patch.ColumnID.UUID)
+				column, err = qtx.GetColumnForShare(r.Context(), patch.ColumnID.UUID)
 				if err != nil {
-					err = apierrors.FromDBErr(err)
+					return apierrors.FromDBErr(err)
 				}
 				if column.BoardID != task.BoardID {
-					err = apierrors.New(http.StatusNotFound, "column not found")
+					return apierrors.New(http.StatusNotFound, "column not found")
 				}
 				if !patch.Position.Valid {
 					newPosition = 0

@@ -18,7 +18,7 @@ type APIErr struct {
 	error
 }
 
-func (e *APIErr) Unwrap() error {
+func (e APIErr) Unwrap() error {
 	return e.error
 }
 
