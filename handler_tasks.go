@@ -87,20 +87,9 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 
 	newColumnId := task.ColumnID
 	newPosition := task.Position
-
 	if patch.ColumnID.Valid {
-		column, err := s.store.GetColumnById(r.Context(), patch.ColumnID.UUID)
-		if err != nil {
-			respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-			return
-		}
-		if column.BoardID != task.BoardID {
-			respondWithError(r.Context(), w, apierrors.New(http.StatusNotFound, "column not found"))
-			return
-		}
 		newColumnId = patch.ColumnID.UUID
 	}
-
 	if patch.Position.Valid {
 		newPosition = int32(patch.Position.Int32)
 	}
@@ -114,6 +103,13 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
 			var err error
 			if newColumnId != task.ColumnID {
+				column, err := s.store.GetColumnForShare(r.Context(), patch.ColumnID.UUID)
+				if err != nil {
+					err = apierrors.FromDBErr(err)
+				}
+				if column.BoardID != task.BoardID {
+					err = apierrors.New(http.StatusNotFound, "column not found")
+				}
 				if !patch.Position.Valid {
 					newPosition = 0
 				}
@@ -214,7 +210,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
-	_, err = s.store.GetColumnById(r.Context(), columnID)
+	_, err = s.store.GetColumn(r.Context(), columnID)
 	if err != nil {
 		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
@@ -248,14 +244,14 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, err)
 		return
 	}
-	dbColumn, err := s.store.GetColumnById(r.Context(), params.ColumnID)
-	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
 
 	var dbTask database.Task
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+		var err error
+		dbColumn, err := qtx.GetColumnForShare(r.Context(), params.ColumnID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
 		positionTaskParam := PositionTaskParam{
 			queries:  qtx,
 			columnID: dbColumn.ID,

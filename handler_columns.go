@@ -142,7 +142,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	oldColumn, err := s.store.GetColumnById(r.Context(), columnID)
+	oldColumn, err := s.store.GetColumn(r.Context(), columnID)
 	if err != nil {
 		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return

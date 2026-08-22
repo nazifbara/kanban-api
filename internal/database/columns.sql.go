@@ -54,12 +54,31 @@ func (q *Queries) DeleteColumn(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const getColumnById = `-- name: GetColumnById :one
+const getColumn = `-- name: GetColumn :one
 SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1
 `
 
-func (q *Queries) GetColumnById(ctx context.Context, id uuid.UUID) (Column, error) {
-	row := q.db.QueryRowContext(ctx, getColumnById, id)
+func (q *Queries) GetColumn(ctx context.Context, id uuid.UUID) (Column, error) {
+	row := q.db.QueryRowContext(ctx, getColumn, id)
+	var i Column
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BoardID,
+		&i.Position,
+	)
+	return i, err
+}
+
+const getColumnForShare = `-- name: GetColumnForShare :one
+SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1 FOR SHARE
+`
+
+func (q *Queries) GetColumnForShare(ctx context.Context, id uuid.UUID) (Column, error) {
+	row := q.db.QueryRowContext(ctx, getColumnForShare, id)
 	var i Column
 	err := row.Scan(
 		&i.ID,

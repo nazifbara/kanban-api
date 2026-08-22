@@ -1,5 +1,8 @@
--- name: GetColumnById :one
+-- name: GetColumn :one
 SELECT * FROM columns WHERE id = $1;
+
+-- name: GetColumnForShare :one
+SELECT * FROM columns WHERE id = $1 FOR SHARE;
 
 -- name: UpdateColumn :one
 UPDATE columns
