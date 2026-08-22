@@ -26,6 +26,9 @@ VALUES (
 ) 
 RETURNING *;
 
+-- name: GetColumnTasksForUpdate :many
+SELECT * FROM tasks WHERE column_id = $1 ORDER BY position ASC FOR UPDATE;
+
 -- name: GetColumnTasks :many
 SELECT * FROM tasks WHERE column_id = $1 ORDER BY position ASC;
 

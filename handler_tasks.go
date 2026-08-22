@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	utils "github.com/nazifbara/kanban-api/internal"
+	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
@@ -62,107 +63,106 @@ func prepareTaskPatch(param UpdateTaskParam) (database.UpdateTaskParams, error) 
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[UpdateTaskParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("invalid task ID"))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
 	task, err := s.store.GetTask(r.Context(), taskID)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 
 	patch, err := prepareTaskPatch(param)
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
-	changeColumn := false
 	newColumnId := task.ColumnID
 	newPosition := task.Position
-	var destinationTasks []database.Task
 
 	if patch.ColumnID.Valid {
 		column, err := s.store.GetColumnById(r.Context(), patch.ColumnID.UUID)
 		if err != nil {
-			respondFromDBErr(r.Context(), w, err)
+			respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 			return
 		}
 		if column.BoardID != task.BoardID {
-			respondWithError(r.Context(), w, http.StatusNotFound, errors.New("column not found"))
+			respondWithError(r.Context(), w, apierrors.New(http.StatusNotFound, "column not found"))
 			return
 		}
-		changeColumn = patch.ColumnID.UUID != task.ColumnID
 		newColumnId = patch.ColumnID.UUID
 	}
-	if changeColumn {
-		destinationTasks, err = s.store.GetColumnTasks(
-			r.Context(),
-			newColumnId,
-		)
-		if err != nil {
-			respondFromDBErr(r.Context(), w, err)
-			return
-		}
-		if !patch.Position.Valid {
-			newPosition = int32(len(destinationTasks))
-		}
-	}
+
 	if patch.Position.Valid {
-		if destinationTasks == nil {
-			destinationTasks, err = s.store.GetColumnTasks(
-				r.Context(),
-				task.ColumnID,
-			)
-			if err != nil {
-				respondFromDBErr(r.Context(), w, err)
-				return
-			}
-		}
-		if !utils.IsPositionInRange(int(patch.Position.Int32), len(destinationTasks), changeColumn) {
-			respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("position out of range"))
-			return
-		}
 		newPosition = int32(patch.Position.Int32)
 	}
 
+	const maxRetries = 3
 	var updatedTask database.Task
-	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		var err error
-		if changeColumn {
-			err = changeTaskColumn(r.Context(), q, task, destinationTasks, patch.ColumnID.UUID, int(newPosition))
-		} else if newPosition != int32(task.Position) {
-			err = positionTask(r.Context(), q, destinationTasks, task, int(newPosition))
+	for range maxRetries {
+		if !patch.Position.Valid {
+			newPosition = task.Position
+		}
+		err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+			var err error
+			if newColumnId != task.ColumnID {
+				if !patch.Position.Valid {
+					newPosition = 0
+				}
+				err = changeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
+			} else if newPosition != int32(task.Position) {
+				positionTaskParam := PositionTaskParam{
+					queries:  qtx,
+					columnID: newColumnId,
+					dbTask:   task,
+					position: int(newPosition),
+				}
+				err = positionTask(r.Context(), positionTaskParam)
+			}
+
+			if err != nil {
+				return err
+			}
+
+			patch.ID = taskID
+			updatedTask, err = s.store.UpdateTask(r.Context(), patch)
+			if err != nil {
+				return apierrors.FromDBErr(err)
+			}
+			return nil
+		})
+		if err == nil {
+			break
+		}
+		if !apierrors.IsDBRetryable(err) {
+			break
 		}
 
+		task, err = s.store.GetTask(r.Context(), taskID)
 		if err != nil {
-			return err
+			err = apierrors.FromDBErr(err)
+			break
 		}
-
-		patch.ID = taskID
-		updatedTask, err = s.store.UpdateTask(r.Context(), patch)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
+		time.Sleep(50 * time.Millisecond)
+	}
 
 	if err != nil {
-		respondWith500(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
 	respondWithJSON(w, http.StatusOK, dbToTask(updatedTask))
 }
 
-func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, newColumnTasks []database.Task, columnID uuid.UUID, newPosition int) error {
-	oldColumnTasks, err := q.GetColumnTasks(
+func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, columnID uuid.UUID, newPosition int) error {
+	oldColumnTasks, err := q.GetColumnTasksForUpdate(
 		ctx,
 		task.ColumnID,
 	)
@@ -173,18 +173,22 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		return t.ID == task.ID
 	})
 	if taskIndex == -1 {
-		return errors.New("task not found in old column")
+		return apierrors.New(http.StatusNotFound, "task not found in old column")
 	}
 	for i := taskIndex + 1; i < len(oldColumnTasks); i++ {
 		t := oldColumnTasks[i]
 		_, err := q.UpdateTask(ctx, database.UpdateTaskParams{ID: t.ID, Position: sql.NullInt32{Int32: t.Position - 1, Valid: true}})
 		if err != nil {
-			return err
+			return apierrors.FromDBErr(err)
 		}
 	}
-	task.Position = int32(newPosition)
-	err = positionTask(ctx, q, newColumnTasks, task, newPosition)
-	if err != nil {
+	positionTaskParam := PositionTaskParam{
+		queries:  q,
+		columnID: columnID,
+		dbTask:   task,
+		position: newPosition,
+	}
+	if err := positionTask(ctx, positionTaskParam); err != nil {
 		return err
 	}
 	return nil
@@ -207,12 +211,12 @@ func validateCreateTaskParam(param CreateTaskParam) error {
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 	columnID, err := utils.GetIdFromPath(r, "columnID")
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	_, err = s.store.GetColumnById(r.Context(), columnID)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	tasks, err := s.store.GetColumnTasks(
@@ -220,7 +224,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 		columnID,
 	)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	respondWithJSON(w, http.StatusOK, dbToTaskSlice(tasks))
@@ -237,31 +241,30 @@ func dbToTaskSlice(dbTasks []database.Task) []Task {
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[CreateTaskParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	if err := validateCreateTaskParam(params); err != nil {
-		respondWithError(r.Context(), w, http.StatusBadRequest, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
 	dbColumn, err := s.store.GetColumnById(r.Context(), params.ColumnID)
 	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
-		return
-	}
-	existingTasks, err := s.store.GetColumnTasks(r.Context(), dbColumn.ID)
-	if err != nil {
-		respondFromDBErr(r.Context(), w, err)
-		return
-	}
-
-	if !utils.IsPositionInRange(params.Position, len(existingTasks), true) {
-		respondWithError(r.Context(), w, http.StatusBadRequest, errors.New("position out of range"))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 
 	var dbTask database.Task
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+		positionTaskParam := PositionTaskParam{
+			queries:  qtx,
+			columnID: dbColumn.ID,
+			dbTask:   dbTask,
+			position: params.Position,
+		}
+		if err := positionTask(r.Context(), positionTaskParam); err != nil {
+			return err
+		}
 		dbTask, err = qtx.CreateTask(
 			r.Context(),
 			database.CreateTaskParams{
@@ -275,66 +278,81 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if err := positionTask(r.Context(), qtx, existingTasks, dbTask, params.Position); err != nil {
-			return err
-		}
 		return nil
 	})
 	if err != nil {
-		respondWith500(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, dbToTask(dbTask))
 }
 
-func positionTask(context context.Context, q *database.Queries, columnTasks []database.Task, dbTask database.Task, newPosition int) error {
-	oldPosition := slices.IndexFunc(columnTasks, func(t database.Task) bool {
-		return t.ID == dbTask.ID
+type PositionTaskParam struct {
+	queries  *database.Queries
+	columnID uuid.UUID
+	dbTask   database.Task
+	position int
+}
+
+func positionTask(ctx context.Context, param PositionTaskParam) error {
+	destinationTasks, err := param.queries.GetColumnTasksForUpdate(
+		ctx,
+		param.columnID,
+	)
+	if err != nil {
+		return apierrors.FromDBErr(err)
+	}
+	oldPosition := slices.IndexFunc(destinationTasks, func(t database.Task) bool {
+		return t.ID == param.dbTask.ID
 	})
-	stopIdx := len(columnTasks)
+	if !utils.IsPositionInRange(param.position, len(destinationTasks), oldPosition == -1) {
+		return apierrors.New(http.StatusBadRequest, "position out of range")
+	}
+
+	stopIdx := len(destinationTasks)
 	if oldPosition != -1 {
 		stopIdx = oldPosition
 	}
-	var err error
+
 	if oldPosition == -1 {
-		for i := newPosition; i < len(columnTasks); i++ {
-			task := columnTasks[i]
+		for i := param.position; i < len(destinationTasks); i++ {
+			task := destinationTasks[i]
 			task.Position++
-			err = q.UpdateTaskPosition(context, database.UpdateTaskPositionParams{
+			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
 				ID:       task.ID,
 				Position: task.Position,
 			})
 			if err != nil {
-				break
+				return apierrors.FromDBErr(err)
 			}
 		}
-	} else if oldPosition > newPosition {
-		for i := newPosition; i < stopIdx; i++ {
-			task := columnTasks[i]
+	} else if oldPosition > param.position {
+		for i := param.position; i < stopIdx; i++ {
+			task := destinationTasks[i]
 			task.Position++
-			err = q.UpdateTaskPosition(context, database.UpdateTaskPositionParams{
+			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
 				ID:       task.ID,
 				Position: task.Position,
 			})
 			if err != nil {
-				break
+				return apierrors.FromDBErr(err)
 			}
 		}
 	} else {
-		for i := newPosition; i > stopIdx; i-- {
-			task := columnTasks[i]
+		for i := param.position; i > stopIdx; i-- {
+			task := destinationTasks[i]
 			task.Position--
-			err = q.UpdateTaskPosition(context, database.UpdateTaskPositionParams{
+			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
 				ID:       task.ID,
 				Position: task.Position,
 			})
 			if err != nil {
-				break
+				return apierrors.FromDBErr(err)
 			}
 		}
 	}
 
-	return err
+	return nil
 }
 
 func dbToTask(dbTask database.Task) Task {
