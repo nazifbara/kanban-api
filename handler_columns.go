@@ -264,7 +264,8 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var dbColumn database.Column
-	s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
+		var err error
 		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
 			database.CreateColumnParams{
