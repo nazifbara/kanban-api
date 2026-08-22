@@ -8,6 +8,11 @@ import (
 	"github.com/lib/pq"
 )
 
+type MultiErr interface {
+	error
+	Unwrap() []error
+}
+
 type APIErr struct {
 	StatusCode int
 	error
