@@ -46,7 +46,7 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
 	var response respondBody
 	if slices.Contains(codesToText, statusCode) {
 		response.Errors = append(response.Errors, http.StatusText(statusCode))
-	} else if merr, ok := errors.AsType[multiErr](err); ok {
+	} else if merr, ok := errors.AsType[apierrors.MultiErr](err); ok {
 		for _, err := range merr.Unwrap() {
 			response.Errors = append(response.Errors, err.Error())
 		}
