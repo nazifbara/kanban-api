@@ -56,8 +56,7 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
 	data, err := json.Marshal(response)
 	if err != nil {
 		errs = append(errs, err)
-		w.WriteHeader(500)
-		return
+		statusCode = 500
 	}
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
 		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
