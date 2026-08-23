@@ -101,7 +101,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, dbToTask(updatedTask))
+	respondWithJSON(w, http.StatusOK, tasks.DBToTask(updatedTask))
 }
 
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	tasks, err := s.store.GetColumnTasks(
+	dbTasks, err := s.store.GetColumnTasks(
 		r.Context(),
 		columnID,
 	)
@@ -123,15 +123,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	respondWithJSON(w, http.StatusOK, dbToTaskSlice(tasks))
-}
-
-func dbToTaskSlice(dbTasks []database.Task) []tasks.Task {
-	tasks := []tasks.Task{}
-	for _, dbTask := range dbTasks {
-		tasks = append(tasks, dbToTask(dbTask))
-	}
-	return tasks
+	respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTasks))
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
@@ -175,18 +167,5 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, dbToTask(dbTask))
-}
-
-func dbToTask(dbTask database.Task) tasks.Task {
-	return tasks.Task{
-		ID:          dbTask.ID,
-		BoardID:     dbTask.BoardID,
-		ColumnID:    dbTask.ColumnID,
-		Title:       dbTask.Title,
-		Description: dbTask.Description.String,
-		CreatedAt:   dbTask.CreatedAt,
-		UpdatedAt:   dbTask.UpdatedAt,
-		Position:    int(dbTask.Position),
-	}
+	respondWithJSON(w, http.StatusCreated, tasks.DBToTask(dbTask))
 }
