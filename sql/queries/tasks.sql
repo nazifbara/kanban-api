@@ -1,3 +1,6 @@
+-- name: GetBoardTasks :many
+SELECT * FROM tasks WHERE board_id = $1 ORDER BY created_at DESC;
+
 -- name: DeleteTask :exec
 DELETE FROM tasks WHERE id = $1; 
 
