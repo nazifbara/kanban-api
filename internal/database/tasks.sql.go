@@ -195,6 +195,29 @@ func (q *Queries) ShiftTasksAfter(ctx context.Context, arg ShiftTasksAfterParams
 	return err
 }
 
+const shiftTasksBetween = `-- name: ShiftTasksBetween :exec
+UPDATE tasks
+SET position = position + $2
+WHERE position > $3 AND position < $4 AND column_id = $1
+`
+
+type ShiftTasksBetweenParams struct {
+	ColumnID uuid.UUID
+	Delta    int32
+	After    int32
+	Before   int32
+}
+
+func (q *Queries) ShiftTasksBetween(ctx context.Context, arg ShiftTasksBetweenParams) error {
+	_, err := q.db.ExecContext(ctx, shiftTasksBetween,
+		arg.ColumnID,
+		arg.Delta,
+		arg.After,
+		arg.Before,
+	)
+	return err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks
 SET

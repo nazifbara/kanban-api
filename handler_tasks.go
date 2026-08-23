@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
 	"github.com/nazifbara/kanban-api/internal/tasks"
@@ -175,9 +174,16 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = tasks.PositionTask(r.Context(), qtx, uuid.Nil, dbColumn.ID, params.Position)
+		err = qtx.ShiftTasksAfter(
+			r.Context(),
+			database.ShiftTasksAfterParams{
+				After:    int32(params.Position),
+				Delta:    1,
+				ColumnID: dbColumn.ID,
+			},
+		)
 		if err != nil {
-			return err
+			return apierrors.FromDBErr(err)
 		}
 		dbTask, err = qtx.CreateTask(
 			r.Context(),
@@ -190,7 +196,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 			},
 		)
 		if err != nil {
-			return err
+			return apierrors.FromDBErr(err)
 		}
 		return nil
 	})

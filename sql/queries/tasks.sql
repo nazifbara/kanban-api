@@ -1,6 +1,11 @@
 -- name: DeleteTask :exec
 DELETE FROM tasks WHERE id = $1; 
 
+-- name: ShiftTasksBetween :exec
+UPDATE tasks
+SET position = position + sqlc.arg(delta)
+WHERE position > sqlc.arg(after) AND position < sqlc.arg(before) AND column_id = $1;
+
 -- name: ShiftTasksAfter :exec
 UPDATE tasks
 SET position = position + sqlc.arg(delta)
