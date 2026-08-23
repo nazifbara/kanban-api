@@ -15,13 +15,3 @@ func GetIdFromPath(r *http.Request, name string) (uuid.UUID, error) {
 	}
 	return id, err
 }
-
-func IsPositionInRange(position int, size int, onInsert bool) bool {
-	if position < 0 {
-		return false
-	}
-	if onInsert {
-		return position <= size
-	}
-	return position < size
-}

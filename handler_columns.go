@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	utils "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
+	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
 type Column struct {

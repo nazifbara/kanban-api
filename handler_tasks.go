@@ -10,9 +10,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	utils "github.com/nazifbara/kanban-api/internal"
+	tasks "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
+	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
 type Task struct {
@@ -116,13 +117,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				}
 				err = changeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
 			} else if newPosition != int32(task.Position) {
-				positionTaskParam := PositionTaskParam{
-					queries:  qtx,
-					columnID: newColumnId,
-					dbTask:   task,
-					position: int(newPosition),
-				}
-				err = positionTask(r.Context(), positionTaskParam)
+				err = tasks.PositionTask(r.Context(), qtx, task.ID, newColumnId, int(newPosition))
 			}
 
 			if err != nil {
@@ -164,7 +159,7 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		task.ColumnID,
 	)
 	if err != nil {
-		return err
+		return apierrors.FromDBErr(err)
 	}
 	taskIndex := slices.IndexFunc(oldColumnTasks, func(t database.Task) bool {
 		return t.ID == task.ID
@@ -179,13 +174,8 @@ func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 			return apierrors.FromDBErr(err)
 		}
 	}
-	positionTaskParam := PositionTaskParam{
-		queries:  q,
-		columnID: columnID,
-		dbTask:   task,
-		position: newPosition,
-	}
-	if err := positionTask(ctx, positionTaskParam); err != nil {
+	err = tasks.PositionTask(ctx, q, task.ID, columnID, newPosition)
+	if err != nil {
 		return err
 	}
 	return nil
@@ -253,13 +243,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		positionTaskParam := PositionTaskParam{
-			queries:  qtx,
-			columnID: dbColumn.ID,
-			dbTask:   dbTask,
-			position: params.Position,
-		}
-		if err := positionTask(r.Context(), positionTaskParam); err != nil {
+		err = tasks.PositionTask(r.Context(), qtx, uuid.Nil, dbColumn.ID, params.Position)
+		if err != nil {
 			return err
 		}
 		dbTask, err = qtx.CreateTask(
@@ -282,74 +267,6 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondWithJSON(w, http.StatusCreated, dbToTask(dbTask))
-}
-
-type PositionTaskParam struct {
-	queries  *database.Queries
-	columnID uuid.UUID
-	dbTask   database.Task
-	position int
-}
-
-func positionTask(ctx context.Context, param PositionTaskParam) error {
-	destinationTasks, err := param.queries.GetColumnTasksForUpdate(
-		ctx,
-		param.columnID,
-	)
-	if err != nil {
-		return apierrors.FromDBErr(err)
-	}
-	oldPosition := slices.IndexFunc(destinationTasks, func(t database.Task) bool {
-		return t.ID == param.dbTask.ID
-	})
-	if !utils.IsPositionInRange(param.position, len(destinationTasks), oldPosition == -1) {
-		return apierrors.New(http.StatusBadRequest, "position out of range")
-	}
-
-	stopIdx := len(destinationTasks)
-	if oldPosition != -1 {
-		stopIdx = oldPosition
-	}
-
-	if oldPosition == -1 {
-		for i := param.position; i < len(destinationTasks); i++ {
-			task := destinationTasks[i]
-			task.Position++
-			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
-				ID:       task.ID,
-				Position: task.Position,
-			})
-			if err != nil {
-				return apierrors.FromDBErr(err)
-			}
-		}
-	} else if oldPosition > param.position {
-		for i := param.position; i < stopIdx; i++ {
-			task := destinationTasks[i]
-			task.Position++
-			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
-				ID:       task.ID,
-				Position: task.Position,
-			})
-			if err != nil {
-				return apierrors.FromDBErr(err)
-			}
-		}
-	} else {
-		for i := param.position; i > stopIdx; i-- {
-			task := destinationTasks[i]
-			task.Position--
-			err = param.queries.UpdateTaskPosition(ctx, database.UpdateTaskPositionParams{
-				ID:       task.ID,
-				Position: task.Position,
-			})
-			if err != nil {
-				return apierrors.FromDBErr(err)
-			}
-		}
-	}
-
-	return nil
 }
 
 func dbToTask(dbTask database.Task) Task {
