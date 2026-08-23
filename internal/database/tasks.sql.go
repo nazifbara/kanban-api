@@ -57,6 +57,15 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 	return i, err
 }
 
+const deleteTask = `-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1
+`
+
+func (q *Queries) DeleteTask(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteTask, id)
+	return err
+}
+
 const getColumnTasks = `-- name: GetColumnTasks :many
 SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE column_id = $1 ORDER BY position ASC
 `
@@ -147,6 +156,43 @@ func (q *Queries) GetTask(ctx context.Context, id uuid.UUID) (Task, error) {
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getTaskForShare = `-- name: GetTaskForShare :one
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE id = $1 FOR SHARE
+`
+
+func (q *Queries) GetTaskForShare(ctx context.Context, id uuid.UUID) (Task, error) {
+	row := q.db.QueryRowContext(ctx, getTaskForShare, id)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const shiftTasksAfter = `-- name: ShiftTasksAfter :exec
+UPDATE tasks
+SET position = position + $2
+WHERE position > $3 AND column_id = $1
+`
+
+type ShiftTasksAfterParams struct {
+	ColumnID uuid.UUID
+	Delta    int32
+	After    int32
+}
+
+func (q *Queries) ShiftTasksAfter(ctx context.Context, arg ShiftTasksAfterParams) error {
+	_, err := q.db.ExecContext(ctx, shiftTasksAfter, arg.ColumnID, arg.Delta, arg.After)
+	return err
 }
 
 const updateTask = `-- name: UpdateTask :one

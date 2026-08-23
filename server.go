@@ -50,6 +50,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("POST /api/tasks", s.handlerCreateTask)
 	mux.HandleFunc("PATCH /api/tasks/{taskID}", s.handlerUpdateTask)
 	mux.HandleFunc("GET /api/columns/{columnID}/tasks", s.handlerColumnTasks)
+	mux.HandleFunc("DELETE /api/tasks/{taskID}", s.handlerDeleteTask)
 	mux.HandleFunc("POST /reset", s.handlerReset)
 	return s
 }

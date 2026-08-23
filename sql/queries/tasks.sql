@@ -1,3 +1,14 @@
+-- name: DeleteTask :exec
+DELETE FROM tasks WHERE id = $1; 
+
+-- name: ShiftTasksAfter :exec
+UPDATE tasks
+SET position = position + sqlc.arg(delta)
+WHERE position > sqlc.arg(after) AND column_id = $1;
+
+-- name: GetTaskForShare :one
+SELECT * FROM tasks WHERE id = $1 FOR SHARE;
+
 -- name: GetTask :one
 SELECT * FROM tasks WHERE id = $1;
 
