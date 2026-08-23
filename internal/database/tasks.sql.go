@@ -66,6 +66,42 @@ func (q *Queries) DeleteTask(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getBoardTasks = `-- name: GetBoardTasks :many
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE board_id = $1 ORDER BY created_at DESC
+`
+
+func (q *Queries) GetBoardTasks(ctx context.Context, boardID uuid.UUID) ([]Task, error) {
+	rows, err := q.db.QueryContext(ctx, getBoardTasks, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Task
+	for rows.Next() {
+		var i Task
+		if err := rows.Scan(
+			&i.ID,
+			&i.BoardID,
+			&i.ColumnID,
+			&i.Title,
+			&i.Description,
+			&i.Position,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getColumnTasks = `-- name: GetColumnTasks :many
 SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE column_id = $1 ORDER BY position ASC
 `

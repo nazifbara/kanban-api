@@ -11,6 +11,20 @@ import (
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
+func (s *server) handlerGetBoardTasks(w http.ResponseWriter, r *http.Request) {
+	boardID, err := utils.GetIdFromPath(r, "boardID")
+	if err != nil {
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		return
+	}
+	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), boardID)
+	if err != nil {
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		return
+	}
+	respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTaskSlice))
+}
+
 func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
