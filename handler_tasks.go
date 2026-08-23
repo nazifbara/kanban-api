@@ -14,32 +14,7 @@ import (
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
-type Task struct {
-	ID          uuid.UUID `json:"id"`
-	BoardID     uuid.UUID `json:"board_id"`
-	ColumnID    uuid.UUID `json:"column_id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Position    int       `json:"position"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-type CreateTaskParam struct {
-	ColumnID    uuid.UUID `json:"column_id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Position    int       `json:"position"`
-}
-
-type UpdateTaskParam struct {
-	ColumnID    *uuid.UUID `json:"column_id"`
-	Title       *string    `json:"title"`
-	Description *string    `json:"description"`
-	Position    *int32     `json:"position"`
-}
-
-func prepareTaskPatch(param UpdateTaskParam) (database.UpdateTaskParams, error) {
+func prepareTaskPatch(param tasks.UpdateParam) (database.UpdateTaskParams, error) {
 	var patch database.UpdateTaskParams
 	if param.ColumnID != nil {
 		patch.ColumnID = uuid.NullUUID{UUID: *param.ColumnID, Valid: true}
@@ -60,7 +35,7 @@ func prepareTaskPatch(param UpdateTaskParam) (database.UpdateTaskParams, error) 
 }
 
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
-	param, err := decodeJSONBody[UpdateTaskParam](r)
+	param, err := decodeJSONBody[tasks.UpdateParam](r)
 	if err != nil {
 		respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -151,7 +126,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, dbToTask(updatedTask))
 }
 
-func validateCreateTaskParam(param CreateTaskParam) error {
+func validateCreateTaskParam(param tasks.CreateParam) error {
 	var errs []error
 	if param.ColumnID == uuid.Nil {
 		errs = append(errs, errors.New("body.column_id is required"))
@@ -187,8 +162,8 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, dbToTaskSlice(tasks))
 }
 
-func dbToTaskSlice(dbTasks []database.Task) []Task {
-	tasks := []Task{}
+func dbToTaskSlice(dbTasks []database.Task) []tasks.Task {
+	tasks := []tasks.Task{}
 	for _, dbTask := range dbTasks {
 		tasks = append(tasks, dbToTask(dbTask))
 	}
@@ -196,7 +171,7 @@ func dbToTaskSlice(dbTasks []database.Task) []Task {
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
-	params, err := decodeJSONBody[CreateTaskParam](r)
+	params, err := decodeJSONBody[tasks.CreateParam](r)
 	if err != nil {
 		respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -239,8 +214,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusCreated, dbToTask(dbTask))
 }
 
-func dbToTask(dbTask database.Task) Task {
-	return Task{
+func dbToTask(dbTask database.Task) tasks.Task {
+	return tasks.Task{
 		ID:          dbTask.ID,
 		BoardID:     dbTask.BoardID,
 		ColumnID:    dbTask.ColumnID,
