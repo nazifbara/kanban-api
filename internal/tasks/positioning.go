@@ -62,6 +62,14 @@ func ChangeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		}
 	}
 	err = PositionTask(ctx, q, task.ID, columnID, newPosition)
+	err = q.ShiftTasksFrom(
+		ctx,
+		database.ShiftTasksFromParams{
+			ColumnID: columnID,
+			Delta:    1,
+			Start:    int32(newPosition),
+		},
+	)
 	if err != nil {
 		return err
 	}

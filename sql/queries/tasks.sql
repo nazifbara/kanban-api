@@ -6,10 +6,10 @@ UPDATE tasks
 SET position = position + sqlc.arg(delta)
 WHERE position > sqlc.arg(after) AND position < sqlc.arg(before) AND column_id = $1;
 
--- name: ShiftTasksAfter :exec
+-- name: ShiftTasksFrom :exec
 UPDATE tasks
 SET position = position + sqlc.arg(delta)
-WHERE position > sqlc.arg(after) AND column_id = $1;
+WHERE position >= sqlc.arg(start) AND column_id = $1;
 
 -- name: GetTaskForShare :one
 SELECT * FROM tasks WHERE id = $1 FOR SHARE;

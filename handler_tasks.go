@@ -22,9 +22,9 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = q.ShiftTasksAfter(
+		err = q.ShiftTasksFrom(
 			r.Context(),
-			database.ShiftTasksAfterParams{After: task.Position, Delta: -1, ColumnID: task.ColumnID},
+			database.ShiftTasksFromParams{Start: task.Position + 1, Delta: -1, ColumnID: task.ColumnID},
 		)
 		if err != nil {
 			return apierrors.FromDBErr(err)
@@ -196,11 +196,11 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = qtx.ShiftTasksAfter(
+		err = qtx.ShiftTasksFrom(
 			r.Context(),
-			database.ShiftTasksAfterParams{
+			database.ShiftTasksFromParams{
 				// include the previous task holding params.Position
-				After:    int32(params.Position - 1),
+				Start:    int32(params.Position),
 				Delta:    1,
 				ColumnID: dbColumn.ID,
 			},
