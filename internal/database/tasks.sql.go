@@ -178,23 +178,6 @@ func (q *Queries) GetTaskForShare(ctx context.Context, id uuid.UUID) (Task, erro
 	return i, err
 }
 
-const shiftTasksAfter = `-- name: ShiftTasksAfter :exec
-UPDATE tasks
-SET position = position + $2
-WHERE position > $3 AND column_id = $1
-`
-
-type ShiftTasksAfterParams struct {
-	ColumnID uuid.UUID
-	Delta    int32
-	After    int32
-}
-
-func (q *Queries) ShiftTasksAfter(ctx context.Context, arg ShiftTasksAfterParams) error {
-	_, err := q.db.ExecContext(ctx, shiftTasksAfter, arg.ColumnID, arg.Delta, arg.After)
-	return err
-}
-
 const shiftTasksBetween = `-- name: ShiftTasksBetween :exec
 UPDATE tasks
 SET position = position + $2
@@ -215,6 +198,23 @@ func (q *Queries) ShiftTasksBetween(ctx context.Context, arg ShiftTasksBetweenPa
 		arg.After,
 		arg.Before,
 	)
+	return err
+}
+
+const shiftTasksFrom = `-- name: ShiftTasksFrom :exec
+UPDATE tasks
+SET position = position + $2
+WHERE position >= $3 AND column_id = $1
+`
+
+type ShiftTasksFromParams struct {
+	ColumnID uuid.UUID
+	Delta    int32
+	Start    int32
+}
+
+func (q *Queries) ShiftTasksFrom(ctx context.Context, arg ShiftTasksFromParams) error {
+	_, err := q.db.ExecContext(ctx, shiftTasksFrom, arg.ColumnID, arg.Delta, arg.Start)
 	return err
 }
 
