@@ -1,18 +1,16 @@
 package main
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"net/http"
-	"slices"
 	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
-	tasks "github.com/nazifbara/kanban-api/internal"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
+	"github.com/nazifbara/kanban-api/internal/tasks"
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
@@ -115,7 +113,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				if !patch.Position.Valid {
 					newPosition = 0
 				}
-				err = changeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
+				err = tasks.ChangeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
 			} else if newPosition != int32(task.Position) {
 				err = tasks.PositionTask(r.Context(), qtx, task.ID, newColumnId, int(newPosition))
 			}
@@ -151,34 +149,6 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respondWithJSON(w, http.StatusOK, dbToTask(updatedTask))
-}
-
-func changeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, columnID uuid.UUID, newPosition int) error {
-	oldColumnTasks, err := q.GetColumnTasksForUpdate(
-		ctx,
-		task.ColumnID,
-	)
-	if err != nil {
-		return apierrors.FromDBErr(err)
-	}
-	taskIndex := slices.IndexFunc(oldColumnTasks, func(t database.Task) bool {
-		return t.ID == task.ID
-	})
-	if taskIndex == -1 {
-		return apierrors.New(http.StatusNotFound, "task not found in old column")
-	}
-	for i := taskIndex + 1; i < len(oldColumnTasks); i++ {
-		t := oldColumnTasks[i]
-		_, err := q.UpdateTask(ctx, database.UpdateTaskParams{ID: t.ID, Position: sql.NullInt32{Int32: t.Position - 1, Valid: true}})
-		if err != nil {
-			return apierrors.FromDBErr(err)
-		}
-	}
-	err = tasks.PositionTask(ctx, q, task.ID, columnID, newPosition)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func validateCreateTaskParam(param CreateTaskParam) error {
