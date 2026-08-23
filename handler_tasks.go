@@ -199,7 +199,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		err = qtx.ShiftTasksAfter(
 			r.Context(),
 			database.ShiftTasksAfterParams{
-				After:    int32(params.Position),
+				// include the previous task holding params.Position
+				After:    int32(params.Position - 1),
 				Delta:    1,
 				ColumnID: dbColumn.ID,
 			},
