@@ -2,10 +2,8 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"net/http"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
@@ -13,26 +11,6 @@ import (
 	"github.com/nazifbara/kanban-api/internal/tasks"
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
-
-func prepareTaskPatch(param tasks.UpdateParam) (database.UpdateTaskParams, error) {
-	var patch database.UpdateTaskParams
-	if param.ColumnID != nil {
-		patch.ColumnID = uuid.NullUUID{UUID: *param.ColumnID, Valid: true}
-	}
-	if param.Title != nil {
-		if *param.Title == "" {
-			return patch, errors.New("body.title can't be empty")
-		}
-		patch.Title = sql.NullString{String: *param.Title, Valid: true}
-	}
-	if param.Description != nil {
-		patch.Description = sql.NullString{String: *param.Description, Valid: true}
-	}
-	if param.Position != nil {
-		patch.Position = sql.NullInt32{Int32: *param.Position, Valid: true}
-	}
-	return patch, nil
-}
 
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[tasks.UpdateParam](r)
@@ -53,7 +31,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	patch, err := prepareTaskPatch(param)
+	patch, err := tasks.PrepareTaskPatch(param)
 	if err != nil {
 		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
@@ -126,20 +104,6 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, dbToTask(updatedTask))
 }
 
-func validateCreateTaskParam(param tasks.CreateParam) error {
-	var errs []error
-	if param.ColumnID == uuid.Nil {
-		errs = append(errs, errors.New("body.column_id is required"))
-	}
-	if param.Title == "" {
-		errs = append(errs, errors.New("body.title is required"))
-	}
-	if utf8.RuneCountInString(param.Title) > 255 {
-		errs = append(errs, errors.New("body.title cannot exceed 255 characters"))
-	}
-	return errors.Join(errs...)
-}
-
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 	columnID, err := utils.GetIdFromPath(r, "columnID")
 	if err != nil {
@@ -176,7 +140,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	if err := validateCreateTaskParam(params); err != nil {
+	if err := tasks.ValidateCreateParam(params); err != nil {
 		respondWithError(r.Context(), w, err)
 		return
 	}
