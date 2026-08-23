@@ -12,6 +12,37 @@ import (
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
+func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
+	taskID, err := utils.GetIdFromPath(r, "taskID")
+	if err != nil {
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		return
+	}
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		task, err := q.GetTaskForShare(r.Context(), taskID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		err = q.ShiftTasksAfter(
+			r.Context(),
+			database.ShiftTasksAfterParams{After: task.Position, Delta: -1, ColumnID: task.ColumnID},
+		)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		if err := q.DeleteTask(r.Context(), taskID); err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		return nil
+	})
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[tasks.UpdateParam](r)
 	if err != nil {
