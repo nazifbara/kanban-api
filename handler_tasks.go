@@ -98,7 +98,29 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				}
 				err = tasks.ChangeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
 			} else if newPosition != int32(task.Position) {
-				err = tasks.PositionTask(r.Context(), qtx, task.ID, newColumnId, int(newPosition))
+				after := min(newPosition, task.Position)
+				before := max(newPosition, task.Position)
+				delta := 0
+				if newPosition > task.Position {
+					// if the new position is foward we need to shift
+					// tasks in between backward, including the task that was
+					// holding newPosition
+					delta = -1
+					before++
+				} else {
+					// just the other way around
+					delta = 1
+					after--
+				}
+				err = qtx.ShiftTasksBetween(
+					r.Context(),
+					database.ShiftTasksBetweenParams{
+						After:    after,
+						Before:   before,
+						Delta:    int32(delta),
+						ColumnID: newColumnId,
+					},
+				)
 			}
 
 			if err != nil {
