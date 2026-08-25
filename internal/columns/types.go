@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nazifbara/kanban-api/internal/database"
 )
 
 type Column struct {
@@ -30,4 +31,24 @@ type PatchParams struct {
 
 type ColumnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
+}
+
+func DBToColumnSlice(dbColumns []database.Column) []Column {
+	columns := []Column{}
+	for _, dbColumn := range dbColumns {
+		columns = append(columns, DBToColumn(dbColumn))
+	}
+	return columns
+}
+
+func DBToColumn(dbColumn database.Column) Column {
+	return Column{
+		ID:          dbColumn.ID,
+		Title:       dbColumn.Title,
+		CreatedAt:   dbColumn.CreatedAt,
+		UpdatedAt:   dbColumn.UpdatedAt,
+		Description: dbColumn.Description.String,
+		BoardID:     dbColumn.BoardID,
+		Position:    int(dbColumn.Position),
+	}
 }
