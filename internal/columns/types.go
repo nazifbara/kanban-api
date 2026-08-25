@@ -33,6 +33,11 @@ type ColumnBoardID struct {
 	BoardID uuid.UUID `json:"board_id"`
 }
 
+type PositionsParams struct {
+	BoardID   uuid.UUID   `json:"board_id"`
+	Positions []uuid.UUID `json:"positions"`
+}
+
 func DBToColumnSlice(dbColumns []database.Column) []Column {
 	columns := []Column{}
 	for _, dbColumn := range dbColumns {
