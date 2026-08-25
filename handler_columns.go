@@ -11,37 +11,12 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
+	"github.com/nazifbara/kanban-api/internal/columns"
 	"github.com/nazifbara/kanban-api/internal/database"
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
-type Column struct {
-	ID          uuid.UUID `json:"id"`
-	Title       string    `json:"title"`
-	BoardID     uuid.UUID `json:"board_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Description string    `json:"description"`
-	Position    int       `json:"position"`
-}
-
-type ColumnParams struct {
-	Title       string    `json:"title"`
-	BoardID     uuid.UUID `json:"board_id"`
-	Position    int32     `json:"position"`
-	Description string    `json:"description"`
-}
-type PatchColumnParams struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Position    *int32  `json:"position"`
-}
-
-type columnBoardID struct {
-	BoardID uuid.UUID `json:"board_id"`
-}
-
-func prepareColumnPatch(params PatchColumnParams) database.UpdateColumnParams {
+func prepareColumnPatch(params columns.PatchParams) database.UpdateColumnParams {
 	var patch database.UpdateColumnParams
 	if params.Title != nil {
 		patch.Title = sql.NullString{String: *params.Title, Valid: true}
@@ -137,7 +112,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 	}
-	patchParams, err := decodeJSONBody[PatchColumnParams](r)
+	patchParams, err := decodeJSONBody[columns.PatchParams](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -188,7 +163,7 @@ func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
-	param, err := decodeJSONBody[columnBoardID](r)
+	param, err := decodeJSONBody[columns.ColumnBoardID](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -244,7 +219,7 @@ func positionColumn(context context.Context, q *database.Queries, boardColumns [
 }
 
 func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
-	params, err := decodeJSONBody[ColumnParams](r)
+	params, err := decodeJSONBody[columns.CreateParams](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -290,16 +265,16 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 	s.respondWithJSON(w, http.StatusCreated, dbToColumn(dbColumn))
 }
 
-func dbToColumnSlice(dbColumns []database.Column) []Column {
-	columns := []Column{}
+func dbToColumnSlice(dbColumns []database.Column) []columns.Column {
+	columns := []columns.Column{}
 	for _, dbColumn := range dbColumns {
 		columns = append(columns, dbToColumn(dbColumn))
 	}
 	return columns
 }
 
-func dbToColumn(dbColumn database.Column) Column {
-	return Column{
+func dbToColumn(dbColumn database.Column) columns.Column {
+	return columns.Column{
 		ID:          dbColumn.ID,
 		Title:       dbColumn.Title,
 		CreatedAt:   dbColumn.CreatedAt,
@@ -310,7 +285,7 @@ func dbToColumn(dbColumn database.Column) Column {
 	}
 }
 
-func validateColumn(params ColumnParams, existingColumnsCount int) error {
+func validateColumn(params columns.CreateParams, existingColumnsCount int) error {
 	var err []error
 	if params.Position < 0 || params.Position > utils.IntToInt32(existingColumnsCount) {
 		err = append(err, fmt.Errorf("body.position outside correct range [0, %d]", existingColumnsCount))
