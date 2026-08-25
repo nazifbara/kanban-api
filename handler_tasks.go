@@ -14,21 +14,21 @@ import (
 func (s *server) handlerGetBoardTasks(w http.ResponseWriter, r *http.Request) {
 	boardID, err := utils.GetIdFromPath(r, "boardID")
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), boardID)
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTaskSlice))
+	s.respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTaskSlice))
 }
 
 func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
@@ -49,7 +49,7 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		respondWithError(r.Context(), w, err)
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
 
@@ -59,25 +59,25 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[tasks.UpdateParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, malformedBodyErr)
+		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
 	task, err := s.store.GetTask(r.Context(), taskID)
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 
 	patch, err := tasks.PrepareTaskPatch(param)
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
@@ -110,7 +110,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				if !patch.Position.Valid {
 					newPosition = 0
 				}
-				err = tasks.ChangeTaskColumn(r.Context(), qtx, task, newColumnId, int(newPosition))
+				err = tasks.ChangeTaskColumn(r.Context(), qtx, task, newColumnId, newPosition)
 			} else if newPosition != int32(task.Position) {
 				after := min(newPosition, task.Position)
 				before := max(newPosition, task.Position)
@@ -164,21 +164,21 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		respondWithError(r.Context(), w, err)
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusOK, tasks.DBToTask(updatedTask))
+	s.respondWithJSON(w, http.StatusOK, tasks.DBToTask(updatedTask))
 }
 
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 	columnID, err := utils.GetIdFromPath(r, "columnID")
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	_, err = s.store.GetColumn(r.Context(), columnID)
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	dbTasks, err := s.store.GetColumnTasks(
@@ -186,20 +186,20 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 		columnID,
 	)
 	if err != nil {
-		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTasks))
+	s.respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTasks))
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[tasks.CreateParam](r)
 	if err != nil {
-		respondWithError(r.Context(), w, malformedBodyErr)
+		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	if err := tasks.ValidateCreateParam(params); err != nil {
-		respondWithError(r.Context(), w, err)
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
 
@@ -229,7 +229,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 				ColumnID:    dbColumn.ID,
 				Description: sql.NullString{String: params.Description, Valid: true},
 				Title:       params.Title,
-				Position:    int32(params.Position),
+				Position:    params.Position,
 			},
 		)
 		if err != nil {
@@ -238,8 +238,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		respondWithError(r.Context(), w, err)
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
-	respondWithJSON(w, http.StatusCreated, tasks.DBToTask(dbTask))
+	s.respondWithJSON(w, http.StatusCreated, tasks.DBToTask(dbTask))
 }
