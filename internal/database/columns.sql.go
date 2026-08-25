@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countColumns = `-- name: CountColumns :one
+SELECT COUNT(*) from columns WHERE board_id = $1
+`
+
+func (q *Queries) CountColumns(ctx context.Context, boardID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countColumns, boardID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createColumn = `-- name: CreateColumn :one
 INSERT INTO columns (id, title, created_at, updated_at, board_id, position)
 VALUES (
@@ -55,7 +66,7 @@ func (q *Queries) DeleteColumn(ctx context.Context, id uuid.UUID) error {
 }
 
 const getColumn = `-- name: GetColumn :one
-SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1
+SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1 FOR SHARE
 `
 
 func (q *Queries) GetColumn(ctx context.Context, id uuid.UUID) (Column, error) {
@@ -125,6 +136,23 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const shiftColumnsFrom = `-- name: ShiftColumnsFrom :exec
+UPDATE columns
+SET position = position + $2
+WHERE position >= $3 AND board_id = $1
+`
+
+type ShiftColumnsFromParams struct {
+	BoardID uuid.UUID
+	Delta   int32
+	Start   int32
+}
+
+func (q *Queries) ShiftColumnsFrom(ctx context.Context, arg ShiftColumnsFromParams) error {
+	_, err := q.db.ExecContext(ctx, shiftColumnsFrom, arg.BoardID, arg.Delta, arg.Start)
+	return err
 }
 
 const updateColumn = `-- name: UpdateColumn :one

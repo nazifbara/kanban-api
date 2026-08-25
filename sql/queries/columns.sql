@@ -1,5 +1,14 @@
+
+-- name: ShiftColumnsFrom :exec
+UPDATE columns
+SET position = position + sqlc.arg(delta)
+WHERE position >= sqlc.arg(start) AND board_id = $1;
+
+-- name: CountColumns :one
+SELECT COUNT(*) from columns WHERE board_id = $1;
+
 -- name: GetColumn :one
-SELECT * FROM columns WHERE id = $1;
+SELECT * FROM columns WHERE id = $1 FOR SHARE;
 
 -- name: GetColumnForShare :one
 SELECT * FROM columns WHERE id = $1 FOR SHARE;

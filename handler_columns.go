@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/columns"
 	"github.com/nazifbara/kanban-api/internal/database"
@@ -38,7 +39,7 @@ func (s *server) handlerUpdateColumnPositions(w http.ResponseWriter, r *http.Req
 		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
-	_, err = s.store.GetBoardByID(r.Context(), params.BoardID)
+	_, err = s.store.GetBoard(r.Context(), params.BoardID)
 	if err != nil {
 		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
@@ -142,7 +143,7 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	board, err := s.store.GetBoardByID(r.Context(), param.BoardID)
+	board, err := s.store.GetBoard(r.Context(), param.BoardID)
 	if err != nil {
 		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
@@ -198,23 +199,31 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	_, err = s.store.GetBoardByID(r.Context(), params.BoardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	existingColumns, err := s.store.GetColumns(r.Context(), params.BoardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	if err := columns.ValidateColumn(params, len(existingColumns)); err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+	if params.BoardID == uuid.Nil {
+		s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "body.board_id is required"))
 		return
 	}
 	var dbColumn database.Column
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		var err error
+		count, err := qtx.CountColumns(r.Context(), params.BoardID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		if err := columns.ValidateColumn(params, int(count)); err != nil {
+			return apierrors.FromErr(http.StatusBadRequest, err)
+		}
+		_, err = qtx.GetBoard(r.Context(), params.BoardID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		err = qtx.ShiftColumnsFrom(r.Context(), database.ShiftColumnsFromParams{
+			Start:   params.Position,
+			Delta:   1,
+			BoardID: params.BoardID,
+		})
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
 		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
 			database.CreateColumnParams{
@@ -225,10 +234,6 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			return apierrors.FromDBErr(err)
-		}
-		err = positionColumn(r.Context(), qtx, existingColumns, dbColumn)
-		if err != nil {
-			return err
 		}
 		return nil
 	})
