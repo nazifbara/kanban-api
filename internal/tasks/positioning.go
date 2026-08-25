@@ -11,7 +11,7 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
-func ChangeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, columnID uuid.UUID, newPosition int) error {
+func ChangeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, columnID uuid.UUID, newPosition int32) error {
 	oldColumnTasks, err := q.GetColumnTasksForUpdate(
 		ctx,
 		task.ColumnID,
@@ -37,7 +37,7 @@ func ChangeTaskColumn(ctx context.Context, q *database.Queries, task database.Ta
 		database.ShiftTasksFromParams{
 			ColumnID: columnID,
 			Delta:    1,
-			Start:    int32(newPosition),
+			Start:    newPosition,
 		},
 	)
 	if err != nil {

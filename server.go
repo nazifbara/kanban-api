@@ -27,8 +27,9 @@ type server struct {
 func newServer(port int, store *store, logger *slog.Logger, cancel context.CancelFunc) *server {
 	mux := http.NewServeMux()
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: requestLogger(logger)(mux),
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           requestLogger(logger)(mux),
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	s := &server{
 		httpServer: srv,
@@ -57,7 +58,10 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 }
 
 func (s *server) handlerReset(w http.ResponseWriter, r *http.Request) {
-	s.store.TruncateBoards(r.Context())
+	if err := s.store.TruncateBoards(r.Context()); err != nil {
+		w.WriteHeader(500)
+		return
+	}
 	w.WriteHeader(200)
 }
 

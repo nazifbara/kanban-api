@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"slices"
 
@@ -21,19 +21,22 @@ func decodeJSONBody[T any](r *http.Request) (T, error) {
 	return params, nil
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload any) {
+func (s *server) respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	data, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("Error while marshaling payload %v: %v", payload, err)
+		s.logger.Error("couldn't marshal response data", slog.Any("error", err))
 		w.WriteHeader(500)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	w.Write(data)
+	if _, err := w.Write(data); err != nil {
+		s.logger.Error("couldn't write response data", slog.Any("error", err))
+		w.WriteHeader(500)
+	}
 }
 
-func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
+func (s *server) respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
 	statusCode := 500
 	if apiErr, ok := err.(apierrors.APIErr); ok {
 		statusCode = apiErr.StatusCode
@@ -61,7 +64,5 @@ func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
 		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	w.Write(data)
+	s.respondWithJSON(w, statusCode, data)
 }
