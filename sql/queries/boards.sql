@@ -4,8 +4,8 @@ UPDATE boards SET name = $1 WHERE id = $2 RETURNING *;
 -- name: DeleteBoard :one
 DELETE FROM boards WHERE id = $1 RETURNING *;
 
--- name: GetBoardByID :one
-SELECT * FROM boards WHERE id = $1;
+-- name: GetBoard :one
+SELECT * FROM boards WHERE id = $1 FOR SHARE;
 
 -- name: GetAllBoards :many
 SELECT * FROM boards ORDER BY created_at DESC;

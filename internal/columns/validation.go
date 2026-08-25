@@ -13,9 +13,7 @@ func ValidateColumn(params CreateParams, existingColumnsCount int) error {
 	if params.Position < 0 || params.Position > utils.IntToInt32(existingColumnsCount) {
 		err = append(err, fmt.Errorf("body.position outside correct range [0, %d]", existingColumnsCount))
 	}
-	if params.BoardID == uuid.Nil {
-		err = append(err, errors.New("body.board_id is required"))
-	}
+
 	if params.Title == "" {
 		err = append(err, errors.New("body.title is required"))
 	}

@@ -71,7 +71,7 @@ func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
-	dbBoard, err := s.store.GetBoardByID(r.Context(), boardID)
+	dbBoard, err := s.store.GetBoard(r.Context(), boardID)
 	if err != nil {
 		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return

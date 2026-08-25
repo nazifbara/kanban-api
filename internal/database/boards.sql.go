@@ -92,12 +92,12 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 	return items, nil
 }
 
-const getBoardByID = `-- name: GetBoardByID :one
-SELECT id, name, created_at, updated_at, description FROM boards WHERE id = $1
+const getBoard = `-- name: GetBoard :one
+SELECT id, name, created_at, updated_at, description FROM boards WHERE id = $1 FOR SHARE
 `
 
-func (q *Queries) GetBoardByID(ctx context.Context, id uuid.UUID) (Board, error) {
-	row := q.db.QueryRowContext(ctx, getBoardByID, id)
+func (q *Queries) GetBoard(ctx context.Context, id uuid.UUID) (Board, error) {
+	row := q.db.QueryRowContext(ctx, getBoard, id)
 	var i Board
 	err := row.Scan(
 		&i.ID,
