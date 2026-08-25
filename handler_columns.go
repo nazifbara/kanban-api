@@ -104,7 +104,7 @@ func (s *server) handlerUpdateColumnPositions(w http.ResponseWriter, r *http.Req
 		return
 	}
 	slices.SortFunc(boardColumns, func(a, b database.Column) int { return int(a.Position - b.Position) })
-	s.respondWithJSON(w, http.StatusOK, dbToColumnSlice(boardColumns))
+	s.respondWithJSON(w, http.StatusOK, columns.DBToColumnSlice(boardColumns))
 }
 
 func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +145,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusOK, dbToColumn(column))
+	s.respondWithJSON(w, http.StatusOK, columns.DBToColumn(column))
 }
 
 func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
@@ -178,7 +178,7 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	s.respondWithJSON(w, 200, dbToColumnSlice(dbColumns))
+	s.respondWithJSON(w, 200, columns.DBToColumnSlice(dbColumns))
 }
 
 func positionColumn(context context.Context, q *database.Queries, boardColumns []database.Column, column database.Column) error {
@@ -262,27 +262,7 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusCreated, dbToColumn(dbColumn))
-}
-
-func dbToColumnSlice(dbColumns []database.Column) []columns.Column {
-	columns := []columns.Column{}
-	for _, dbColumn := range dbColumns {
-		columns = append(columns, dbToColumn(dbColumn))
-	}
-	return columns
-}
-
-func dbToColumn(dbColumn database.Column) columns.Column {
-	return columns.Column{
-		ID:          dbColumn.ID,
-		Title:       dbColumn.Title,
-		CreatedAt:   dbColumn.CreatedAt,
-		UpdatedAt:   dbColumn.UpdatedAt,
-		Description: dbColumn.Description.String,
-		BoardID:     dbColumn.BoardID,
-		Position:    int(dbColumn.Position),
-	}
+	s.respondWithJSON(w, http.StatusCreated, columns.DBToColumn(dbColumn))
 }
 
 func validateColumn(params columns.CreateParams, existingColumnsCount int) error {
