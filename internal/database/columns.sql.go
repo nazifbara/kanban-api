@@ -84,25 +84,6 @@ func (q *Queries) GetColumn(ctx context.Context, id uuid.UUID) (Column, error) {
 	return i, err
 }
 
-const getColumnForShare = `-- name: GetColumnForShare :one
-SELECT id, title, description, created_at, updated_at, board_id, position FROM columns WHERE id = $1 FOR SHARE
-`
-
-func (q *Queries) GetColumnForShare(ctx context.Context, id uuid.UUID) (Column, error) {
-	row := q.db.QueryRowContext(ctx, getColumnForShare, id)
-	var i Column
-	err := row.Scan(
-		&i.ID,
-		&i.Title,
-		&i.Description,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.BoardID,
-		&i.Position,
-	)
-	return i, err
-}
-
 const getColumns = `-- name: GetColumns :many
 SELECT id, title, description, created_at, updated_at, board_id, position from columns WHERE board_id = $1 ORDER BY position ASC
 `
