@@ -129,9 +129,26 @@ func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
-	err = s.store.DeleteColumn(r.Context(), columnID)
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		dbColumn, err := q.GetColumn(r.Context(), columnID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		err = q.ShiftColumnsFrom(
+			r.Context(),
+			database.ShiftColumnsFromParams{Start: dbColumn.Position + 1, Delta: -1, BoardID: dbColumn.BoardID},
+		)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		err = q.DeleteColumn(r.Context(), columnID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		return nil
+	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
