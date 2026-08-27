@@ -3,8 +3,6 @@ package main
 import (
 	"database/sql"
 	"net/http"
-	"slices"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
@@ -25,59 +23,6 @@ func prepareColumnPatch(params columns.PatchParams) database.UpdateColumnParams 
 		patch.Position = sql.NullInt32{Int32: *params.Position, Valid: true}
 	}
 	return patch
-}
-
-func (s *server) handlerUpdateColumnPositions(w http.ResponseWriter, r *http.Request) {
-	params, err := decodeJSONBody[columns.PositionsParams](r)
-	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
-		return
-	}
-	if err := columns.ValidatePositionsParams(params); err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
-		return
-	}
-	_, err = s.store.GetBoard(r.Context(), params.BoardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	boardColumns, err := s.store.GetColumns(r.Context(), params.BoardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	if len(boardColumns) != len(params.Positions) {
-		s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "positions don't match board columns count"))
-		return
-	}
-
-	for _, columnID := range params.Positions {
-		if !slices.ContainsFunc(boardColumns, func(c database.Column) bool { return c.ID == columnID }) {
-			s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "at least one column doesn't belong to the board"))
-			return
-		}
-	}
-	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		for position, columnID := range params.Positions {
-			if err := q.UpdateColumnPosition(r.Context(), database.UpdateColumnPositionParams{ID: columnID, Position: int32(position)}); err != nil {
-				return apierrors.FromDBErr(err)
-			}
-			oldPosition := slices.IndexFunc(boardColumns, func(c database.Column) bool { return c.ID == columnID })
-			if oldPosition == -1 {
-				return apierrors.New(http.StatusBadRequest, "can't find column old position")
-			}
-			boardColumns[oldPosition].Position = int32(position)
-			boardColumns[oldPosition].UpdatedAt = time.Now()
-		}
-		return nil
-	})
-	if err != nil {
-		s.respondWithError(r.Context(), w, err)
-		return
-	}
-	slices.SortFunc(boardColumns, func(a, b database.Column) int { return int(a.Position - b.Position) })
-	s.respondWithJSON(w, http.StatusOK, columns.DBToColumnSlice(boardColumns))
 }
 
 func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
