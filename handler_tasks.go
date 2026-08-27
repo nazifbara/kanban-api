@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"net/http"
-	"time"
 
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
@@ -57,7 +56,7 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
-	param, err := decodeJSONBody[tasks.UpdateParam](r)
+	param, err := decodeJSONBody[tasks.PatchParam](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
@@ -69,99 +68,88 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := s.store.GetTask(r.Context(), taskID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-
-	patch, err := tasks.PrepareTaskPatch(param)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
-		return
-	}
-
-	newColumnId := task.ColumnID
-	newPosition := task.Position
-	if patch.ColumnID.Valid {
-		newColumnId = patch.ColumnID.UUID
-	}
-	if patch.Position.Valid {
-		newPosition = int32(patch.Position.Int32)
-	}
-
-	const maxRetries = 3
 	var updatedTask database.Task
-	for range maxRetries {
-		if !patch.Position.Valid {
-			newPosition = task.Position
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		task, err := q.GetTaskForUpdate(r.Context(), taskID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
 		}
-		err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-			var err error
-			var column database.Column
-			if newColumnId != task.ColumnID {
-				column, err = qtx.GetColumn(r.Context(), patch.ColumnID.UUID)
-				if err != nil {
-					return apierrors.FromDBErr(err)
-				}
-				if column.BoardID != task.BoardID {
-					return apierrors.New(http.StatusNotFound, "column not found")
-				}
-				if !patch.Position.Valid {
-					newPosition = 0
-				}
-				err = tasks.ChangeTaskColumn(r.Context(), qtx, task, newColumnId, newPosition)
-			} else if newPosition != int32(task.Position) {
-				after := min(newPosition, task.Position)
-				before := max(newPosition, task.Position)
-				delta := 0
-				if newPosition > task.Position {
-					// if the new position is foward we need to shift
-					// tasks in between backward, including the task that was
-					// holding newPosition
-					delta = -1
-					before++
-				} else {
-					// just the other way around
-					delta = 1
-					after--
-				}
-				err = qtx.ShiftTasksBetween(
-					r.Context(),
-					database.ShiftTasksBetweenParams{
-						After:    after,
-						Before:   before,
-						Delta:    int32(delta),
-						ColumnID: newColumnId,
-					},
-				)
-			}
-
-			if err != nil {
-				return err
-			}
-
-			patch.ID = taskID
-			updatedTask, err = s.store.UpdateTask(r.Context(), patch)
+		var destinationColumn database.Column
+		if param.ColumnID != nil && *param.ColumnID != task.ColumnID {
+			destinationColumn, err = q.GetColumn(r.Context(), *param.ColumnID)
 			if err != nil {
 				return apierrors.FromDBErr(err)
 			}
-			return nil
-		})
-		if err == nil {
-			break
-		}
-		if !apierrors.IsDBRetryable(err) {
-			break
+			if destinationColumn.BoardID != task.BoardID {
+				return apierrors.New(http.StatusNotFound, "column not found")
+			}
+
+			if param.Position == nil {
+				param.Position = new(int32)
+			}
+
+			c, err := q.CountTasks(r.Context(), *param.ColumnID)
+			if err != nil {
+				return apierrors.FromDBErr(err)
+			}
+			count := utils.Ptr(int(c))
+
+			// this is where the update begin on this branch
+			// so it's time to validate the request body
+			if err := tasks.ValidatePatchParam(param, count); err != nil {
+				return apierrors.FromErr(http.StatusBadRequest, err)
+			}
+			err = tasks.ChangeTaskColumn(r.Context(), q, task, *param.ColumnID, *param.Position)
+		} else if param.Position != nil && *param.Position != int32(task.Position) {
+			after := min(*param.Position, task.Position)
+			before := max(*param.Position, task.Position)
+			delta := 0
+			if *param.Position > task.Position {
+				// if the new position is foward we need to shift
+				// tasks in between backward, including the task that was
+				// holding newPosition
+				delta = -1
+				before++
+			} else {
+				// just the other way around
+				delta = 1
+				after--
+			}
+			count, err := q.CountTasks(r.Context(), task.ColumnID)
+			if err != nil {
+				return apierrors.FromDBErr(err)
+			}
+
+			if err := tasks.ValidatePatchParam(param, utils.Ptr(int(count-1))); err != nil {
+				return apierrors.FromErr(http.StatusBadRequest, err)
+			}
+			err = q.ShiftTasksBetween(
+				r.Context(),
+				database.ShiftTasksBetweenParams{
+					After:    after,
+					Before:   before,
+					Delta:    int32(delta),
+					ColumnID: task.ColumnID,
+				},
+			)
+		} else {
+			if err := tasks.ValidatePatchParam(param, nil); err != nil {
+				return apierrors.FromErr(http.StatusBadRequest, err)
+			}
 		}
 
-		task, err = s.store.GetTask(r.Context(), taskID)
 		if err != nil {
-			err = apierrors.FromDBErr(err)
-			break
+			return err
 		}
-		time.Sleep(50 * time.Millisecond)
-	}
+
+		patch := tasks.PrepareTaskPatch(param)
+		patch.ID = taskID
+		updatedTask, err = q.UpdateTask(r.Context(), patch)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		return nil
+	})
 
 	if err != nil {
 		s.respondWithError(r.Context(), w, err)
@@ -198,19 +186,23 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	if err := tasks.ValidateCreateParam(params); err != nil {
-		s.respondWithError(r.Context(), w, err)
-		return
-	}
-
 	var dbTask database.Task
-	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		var err error
-		dbColumn, err := qtx.GetColumn(r.Context(), params.ColumnID)
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		dbColumn, err := q.GetColumn(r.Context(), params.ColumnID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = qtx.ShiftTasksFrom(
+		count, err := q.CountTasks(
+			r.Context(),
+			params.ColumnID,
+		)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		if err := tasks.ValidateCreateParam(params, int(count)); err != nil {
+			return apierrors.FromErr(http.StatusBadRequest, err)
+		}
+		err = q.ShiftTasksFrom(
 			r.Context(),
 			database.ShiftTasksFromParams{
 				// include the previous task holding params.Position
@@ -222,7 +214,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		dbTask, err = qtx.CreateTask(
+		dbTask, err = q.CreateTask(
 			r.Context(),
 			database.CreateTaskParams{
 				BoardID:     dbColumn.BoardID,

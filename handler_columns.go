@@ -45,7 +45,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		if err := columns.ValidatePatch(patchParams, int(count)); err != nil {
+		if err := columns.ValidatePatch(patchParams, utils.Ptr(int(count-1))); err != nil {
 			return apierrors.FromErr(http.StatusBadRequest, err)
 		}
 		patch := prepareColumnPatch(patchParams)

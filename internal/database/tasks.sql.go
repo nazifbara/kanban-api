@@ -12,6 +12,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countTasks = `-- name: CountTasks :one
+SELECT COUNT(*) from tasks WHERE column_id = $1
+`
+
+func (q *Queries) CountTasks(ctx context.Context, columnID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countTasks, columnID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTask = `-- name: CreateTask :one
 INSERT INTO tasks (id, board_id, column_id, title, description, position, created_at, updated_at)
 VALUES (
@@ -200,6 +211,26 @@ SELECT id, board_id, column_id, title, description, position, created_at, update
 
 func (q *Queries) GetTaskForShare(ctx context.Context, id uuid.UUID) (Task, error) {
 	row := q.db.QueryRowContext(ctx, getTaskForShare, id)
+	var i Task
+	err := row.Scan(
+		&i.ID,
+		&i.BoardID,
+		&i.ColumnID,
+		&i.Title,
+		&i.Description,
+		&i.Position,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTaskForUpdate = `-- name: GetTaskForUpdate :one
+SELECT id, board_id, column_id, title, description, position, created_at, updated_at FROM tasks WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) GetTaskForUpdate(ctx context.Context, id uuid.UUID) (Task, error) {
+	row := q.db.QueryRowContext(ctx, getTaskForUpdate, id)
 	var i Task
 	err := row.Scan(
 		&i.ID,

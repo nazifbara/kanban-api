@@ -25,7 +25,7 @@ type CreateParam struct {
 	Position    int32     `json:"position"`
 }
 
-type UpdateParam struct {
+type PatchParam struct {
 	ColumnID    *uuid.UUID `json:"column_id"`
 	Title       *string    `json:"title"`
 	Description *string    `json:"description"`

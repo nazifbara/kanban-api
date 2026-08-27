@@ -2,35 +2,22 @@ package tasks
 
 import (
 	"context"
-	"database/sql"
-	"net/http"
-	"slices"
 
 	"github.com/google/uuid"
-	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
 func ChangeTaskColumn(ctx context.Context, q *database.Queries, task database.Task, columnID uuid.UUID, newPosition int32) error {
-	oldColumnTasks, err := q.GetColumnTasksForUpdate(
+	err := q.ShiftTasksFrom(
 		ctx,
-		task.ColumnID,
+		database.ShiftTasksFromParams{
+			ColumnID: task.ColumnID,
+			Delta:    -1,
+			Start:    task.Position + 1,
+		},
 	)
 	if err != nil {
-		return apierrors.FromDBErr(err)
-	}
-	taskIndex := slices.IndexFunc(oldColumnTasks, func(t database.Task) bool {
-		return t.ID == task.ID
-	})
-	if taskIndex == -1 {
-		return apierrors.New(http.StatusNotFound, "task not found in old column")
-	}
-	for i := taskIndex + 1; i < len(oldColumnTasks); i++ {
-		t := oldColumnTasks[i]
-		_, err := q.UpdateTask(ctx, database.UpdateTaskParams{ID: t.ID, Position: sql.NullInt32{Int32: t.Position - 1, Valid: true}})
-		if err != nil {
-			return apierrors.FromDBErr(err)
-		}
+		return err
 	}
 	err = q.ShiftTasksFrom(
 		ctx,

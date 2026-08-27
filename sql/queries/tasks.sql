@@ -14,11 +14,17 @@ UPDATE tasks
 SET position = position + sqlc.arg(delta)
 WHERE position >= sqlc.arg(start) AND column_id = $1;
 
+-- name: GetTask :one
+SELECT * FROM tasks WHERE id = $1;
+
 -- name: GetTaskForShare :one
 SELECT * FROM tasks WHERE id = $1 FOR SHARE;
 
--- name: GetTask :one
-SELECT * FROM tasks WHERE id = $1;
+-- name: GetTaskForUpdate :one
+SELECT * FROM tasks WHERE id = $1 FOR UPDATE;
+
+-- name: CountTasks :one
+SELECT COUNT(*) from tasks WHERE column_id = $1;
 
 -- name: UpdateTask :one 
 UPDATE tasks

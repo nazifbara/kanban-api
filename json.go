@@ -56,13 +56,9 @@ func (s *server) respondWithError(ctx context.Context, w http.ResponseWriter, er
 	} else {
 		response.Errors = append(response.Errors, err.Error())
 	}
-	data, err := json.Marshal(response)
-	if err != nil {
-		errs = append(errs, err)
-		statusCode = 500
-	}
+
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
 		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
 	}
-	s.respondWithJSON(w, statusCode, data)
+	s.respondWithJSON(w, statusCode, response)
 }

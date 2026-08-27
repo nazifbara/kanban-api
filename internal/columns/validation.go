@@ -8,10 +8,10 @@ import (
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
 
-func ValidatePatch(patch PatchParams, existingColumnsCount int) error {
+func ValidatePatch(patch PatchParams, maxPosition *int) error {
 	var errs []error
-	if patch.Position != nil && *patch.Position < 0 || *patch.Position > utils.IntToInt32(existingColumnsCount) {
-		errs = append(errs, fmt.Errorf("body.position outside correct range [0, %d]", existingColumnsCount))
+	if maxPosition != nil && (patch.Position != nil && (*patch.Position < 0 || *patch.Position > utils.IntToInt32(*maxPosition))) {
+		errs = append(errs, fmt.Errorf("body.position outside correct range [0, %d]", *maxPosition))
 	}
 	if patch.Title != nil && *patch.Title == "" {
 		errs = append(errs, errors.New("body.title is required"))
@@ -19,10 +19,10 @@ func ValidatePatch(patch PatchParams, existingColumnsCount int) error {
 	return errors.Join(errs...)
 }
 
-func ValidateColumn(params CreateParams, existingColumnsCount int) error {
+func ValidateColumn(params CreateParams, maxPosition int) error {
 	var err []error
-	if params.Position < 0 || params.Position > utils.IntToInt32(existingColumnsCount) {
-		err = append(err, fmt.Errorf("body.position outside correct range [0, %d]", existingColumnsCount))
+	if params.Position < 0 || params.Position > utils.IntToInt32(maxPosition) {
+		err = append(err, fmt.Errorf("body.position outside correct range [0, %d]", maxPosition))
 	}
 
 	if params.Title == "" {
