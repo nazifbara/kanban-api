@@ -119,6 +119,29 @@ func (q *Queries) GetColumns(ctx context.Context, boardID uuid.UUID) ([]Column, 
 	return items, nil
 }
 
+const shiftColumnsBetween = `-- name: ShiftColumnsBetween :exec
+UPDATE columns
+SET position = position + $2
+WHERE position > $3 AND position < $4 AND board_id = $1
+`
+
+type ShiftColumnsBetweenParams struct {
+	BoardID uuid.UUID
+	Delta   int32
+	After   int32
+	Before  int32
+}
+
+func (q *Queries) ShiftColumnsBetween(ctx context.Context, arg ShiftColumnsBetweenParams) error {
+	_, err := q.db.ExecContext(ctx, shiftColumnsBetween,
+		arg.BoardID,
+		arg.Delta,
+		arg.After,
+		arg.Before,
+	)
+	return err
+}
+
 const shiftColumnsFrom = `-- name: ShiftColumnsFrom :exec
 UPDATE columns
 SET position = position + $2
