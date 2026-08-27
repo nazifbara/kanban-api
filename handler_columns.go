@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
 	"net/http"
 	"slices"
 	"time"
@@ -92,27 +90,53 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	oldColumn, err := s.store.GetColumn(r.Context(), columnID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	patch := prepareColumnPatch(patchParams)
-	patch.ID = columnID
-	boardColumns, err := s.store.GetColumns(r.Context(), oldColumn.BoardID)
-	if patch.Position.Valid && (int(patch.Position.Int32) >= len(boardColumns) || patch.Position.Int32 < 0) {
-		s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, fmt.Sprintf("column position out of range [0, %d]", len(boardColumns))))
-		return
-	}
-	var column database.Column
+	var dbColumn database.Column
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		column, err = q.UpdateColumn(r.Context(), patch)
+		oldColumn, err := q.GetColumn(r.Context(), columnID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = positionColumn(r.Context(), q, boardColumns, column)
+		count, err := q.CountColumns(r.Context(), oldColumn.BoardID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		if err := columns.ValidatePatch(patchParams, int(count)); err != nil {
+			return apierrors.FromErr(http.StatusBadRequest, err)
+		}
+		patch := prepareColumnPatch(patchParams)
+		patch.ID = columnID
+
+		if patchParams.Position != nil && *patchParams.Position != oldColumn.Position {
+			after := min(*patchParams.Position, oldColumn.Position)
+			before := max(*patchParams.Position, oldColumn.Position)
+			delta := 0
+			if patchParams.Position != nil && *patchParams.Position > oldColumn.Position {
+				// if the new position is foward we need to shift
+				// columns in between backward, including the column that was
+				// holding patchParams.Position
+				delta = -1
+				before++
+			} else {
+				// just the other way around
+				delta = 1
+				after--
+			}
+			err = q.ShiftColumnsBetween(
+				r.Context(),
+				database.ShiftColumnsBetweenParams{
+					After:   after,
+					Before:  before,
+					Delta:   int32(delta),
+					BoardID: oldColumn.BoardID,
+				},
+			)
+		}
 		if err != nil {
 			return err
+		}
+		dbColumn, err = q.UpdateColumn(r.Context(), patch)
+		if err != nil {
+			return apierrors.FromDBErr(err)
 		}
 		return nil
 	})
@@ -120,7 +144,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusOK, columns.DBToColumn(column))
+	s.respondWithJSON(w, http.StatusOK, columns.DBToColumn(dbColumn))
 }
 
 func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
@@ -177,43 +201,6 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.respondWithJSON(w, 200, columns.DBToColumnSlice(dbColumns))
-}
-
-func positionColumn(context context.Context, q *database.Queries, boardColumns []database.Column, column database.Column) error {
-	oldPosition := slices.IndexFunc(boardColumns, func(c database.Column) bool {
-		return c.ID == column.ID
-	})
-	stopIdx := len(boardColumns)
-	if oldPosition != -1 {
-		stopIdx = oldPosition
-	}
-	var err error
-	if oldPosition < int(column.Position) {
-		for i := int(column.Position); i > stopIdx; i-- {
-			column := boardColumns[i]
-			column.Position--
-			err = q.UpdateColumnPosition(context, database.UpdateColumnPositionParams{
-				ID:       column.ID,
-				Position: column.Position,
-			})
-			if err != nil {
-				break
-			}
-		}
-	} else {
-		for i := int(column.Position); i < stopIdx; i++ {
-			column := boardColumns[i]
-			column.Position++
-			err = q.UpdateColumnPosition(context, database.UpdateColumnPositionParams{
-				ID:       column.ID,
-				Position: column.Position,
-			})
-			if err != nil {
-				break
-			}
-		}
-	}
-	return err
 }
 
 func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {

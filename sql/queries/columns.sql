@@ -1,3 +1,7 @@
+-- name: ShiftColumnsBetween :exec
+UPDATE columns
+SET position = position + sqlc.arg(delta)
+WHERE position > sqlc.arg(after) AND position < sqlc.arg(before) AND board_id = $1;
 
 -- name: ShiftColumnsFrom :exec
 UPDATE columns
