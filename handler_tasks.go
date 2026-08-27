@@ -100,7 +100,7 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 			var err error
 			var column database.Column
 			if newColumnId != task.ColumnID {
-				column, err = qtx.GetColumnForShare(r.Context(), patch.ColumnID.UUID)
+				column, err = qtx.GetColumn(r.Context(), patch.ColumnID.UUID)
 				if err != nil {
 					return apierrors.FromDBErr(err)
 				}
@@ -206,7 +206,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 	var dbTask database.Task
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
 		var err error
-		dbColumn, err := qtx.GetColumnForShare(r.Context(), params.ColumnID)
+		dbColumn, err := qtx.GetColumn(r.Context(), params.ColumnID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}

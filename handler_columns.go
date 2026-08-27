@@ -143,14 +143,20 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
-	board, err := s.store.GetBoard(r.Context(), param.BoardID)
+	var dbColumns []database.Column
+	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
+		board, err := q.GetBoard(r.Context(), param.BoardID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		dbColumns, err = q.GetColumns(r.Context(), board.ID)
+		if err != nil {
+			return apierrors.FromDBErr(err)
+		}
+		return nil
+	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	dbColumns, err := s.store.GetColumns(r.Context(), board.ID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		s.respondWithError(r.Context(), w, err)
 		return
 	}
 	s.respondWithJSON(w, 200, columns.DBToColumnSlice(dbColumns))
