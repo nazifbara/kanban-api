@@ -12,3 +12,7 @@ type IdentityWithToken struct {
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 }
+
+type JWTToken struct {
+	Token string `json:"token"`
+}

@@ -10,6 +10,38 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 )
 
+func (s *server) handlerRefresh(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		return
+	}
+
+	refreshToken, err := s.store.GetRefreshToken(r.Context(), token)
+	if err != nil {
+		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		return
+	}
+
+	if refreshToken.RevokedAt.Valid {
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusUnauthorized, errors.New("resfresh token has been revoked")))
+		return
+	}
+
+	if !time.Now().Before(refreshToken.ExpiresAt) {
+		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusUnauthorized, errors.New("resfresh token has expired")))
+		return
+	}
+
+	token, err = auth.MakeJWT(refreshToken.UserID, s.jwtSecret, time.Hour)
+	if err != nil {
+		s.respondWithError(r.Context(), w, err)
+		return
+	}
+
+	s.respondWithJSON(w, http.StatusCreated, auth.JWTToken{Token: token})
+}
+
 func (s *server) handlerLogin(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[auth.Params](r)
 	if err != nil {
