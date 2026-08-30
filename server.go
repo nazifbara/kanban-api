@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/nazifbara/kanban-api/internal/apierrors"
@@ -22,6 +24,7 @@ type server struct {
 	store      *store
 	logger     *slog.Logger
 	cancel     context.CancelFunc
+	jwtSecret  string
 }
 
 func newServer(port int, store *store, logger *slog.Logger, cancel context.CancelFunc) *server {
@@ -31,13 +34,19 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 		Handler:           requestLogger(logger)(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET must be set")
+	}
 	s := &server{
 		httpServer: srv,
+		jwtSecret:  jwtSecret,
 		store:      store,
 		logger:     logger,
 		cancel:     cancel,
 	}
 
+	mux.HandleFunc("POST /api/login", s.handlerLogin)
 	mux.HandleFunc("POST /api/sign-up", s.handlerSignUp)
 	mux.HandleFunc("POST /api/boards", s.handlerCreateBoard)
 	mux.HandleFunc("GET /api/boards", s.handlerGetAllBoards)

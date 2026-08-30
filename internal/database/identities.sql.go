@@ -31,3 +31,20 @@ func (q *Queries) CreateIdentity(ctx context.Context, arg CreateIdentityParams) 
 	)
 	return i, err
 }
+
+const getIdentityByEmail = `-- name: GetIdentityByEmail :one
+SELECT id, email, password_hash, created_at, updated_at FROM identities WHERE email = $1
+`
+
+func (q *Queries) GetIdentityByEmail(ctx context.Context, email string) (Identity, error) {
+	row := q.db.QueryRowContext(ctx, getIdentityByEmail, email)
+	var i Identity
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
