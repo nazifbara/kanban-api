@@ -38,6 +38,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 		cancel:     cancel,
 	}
 
+	mux.HandleFunc("POST /api/sign-up", s.handlerSignUp)
 	mux.HandleFunc("POST /api/boards", s.handlerCreateBoard)
 	mux.HandleFunc("GET /api/boards", s.handlerGetAllBoards)
 	mux.HandleFunc("GET /api/boards/{boardID}", s.handlerGetBoard)
