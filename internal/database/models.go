@@ -29,6 +29,14 @@ type Column struct {
 	Position    int32
 }
 
+type Identity struct {
+	ID           uuid.UUID
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 type Task struct {
 	ID          uuid.UUID
 	BoardID     uuid.UUID
@@ -38,4 +46,13 @@ type Task struct {
 	Position    int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type User struct {
+	ID        uuid.UUID
+	Email     string
+	FirstName string
+	LastName  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
