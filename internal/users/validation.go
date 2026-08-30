@@ -5,7 +5,11 @@ import (
 )
 
 func ValidateParams(params UserParam) error {
-	errs := make([]error, 0, 3)
+	errs := []error{}
+
+	if params.Email == "" {
+		errs = append(errs, errors.New("body.email is required"))
+	}
 	if params.LastName == "" {
 		errs = append(errs, errors.New("body.last_name is required"))
 	}
@@ -16,7 +20,7 @@ func ValidateParams(params UserParam) error {
 		errs = append(errs, errors.New("body.password is required"))
 	}
 	if len(params.Password) < 8 {
-		errs = append(errs, errors.New("passowrd must be at least 8 characters long"))
+		errs = append(errs, errors.New("body.password must be at least 8 characters long"))
 	}
 
 	return errors.Join(errs...)
