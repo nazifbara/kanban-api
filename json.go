@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	pkgerr "github.com/pkg/errors"
@@ -42,12 +41,11 @@ func (s *server) respondWithError(ctx context.Context, w http.ResponseWriter, er
 		statusCode = apiErr.StatusCode
 	}
 	errs := []error{err}
-	codesToText := []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusInternalServerError, http.StatusNotFound}
 	type respondBody struct {
 		Errors []string `json:"errors"`
 	}
 	var response respondBody
-	if slices.Contains(codesToText, statusCode) {
+	if statusCode != http.StatusBadRequest {
 		response.Errors = append(response.Errors, http.StatusText(statusCode))
 	} else if merr, ok := errors.AsType[apierrors.MultiErr](err); ok {
 		for _, err := range merr.Unwrap() {

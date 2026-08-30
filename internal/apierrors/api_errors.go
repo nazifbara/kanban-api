@@ -40,15 +40,21 @@ func FromDBErr(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		return FromErr(http.StatusNotFound, err)
 	}
-	return FromErr(http.StatusInternalServerError, err)
-}
 
-func IsDBRetryable(err error) bool {
 	if pqErr, ok := errors.AsType[*pq.Error](err); ok {
 		switch pqErr.Code {
+		case "23505":
+			return FromErr(http.StatusConflict, err)
+		case "23503", "22P02", "22001", "22003", "23502", "23514":
+			return FromErr(http.StatusBadRequest, err)
 		case "40P01", "40001":
-			return true
+			return FromErr(http.StatusConflict, err)
+		case "53300", "08000", "08003", "08006", "57P03":
+			return FromErr(http.StatusServiceUnavailable, err)
+		case "57014":
+			return FromErr(http.StatusGatewayTimeout, err)
 		}
 	}
-	return false
+
+	return FromErr(http.StatusInternalServerError, err)
 }
