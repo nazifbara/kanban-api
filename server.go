@@ -46,6 +46,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 		cancel:     cancel,
 	}
 
+	mux.HandleFunc("POST /api/refresh", s.handlerRefresh)
 	mux.HandleFunc("POST /api/login", s.handlerLogin)
 	mux.HandleFunc("POST /api/sign-up", s.handlerSignUp)
 	mux.HandleFunc("POST /api/boards", s.handlerCreateBoard)
@@ -63,6 +64,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("GET /api/boards/{boardID}/tasks", s.handlerGetBoardTasks)
 	mux.HandleFunc("DELETE /api/tasks/{taskID}", s.handlerDeleteTask)
 	mux.HandleFunc("POST /reset", s.handlerReset)
+
 	return s
 }
 
