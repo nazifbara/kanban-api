@@ -37,6 +37,15 @@ type Identity struct {
 	UpdatedAt    time.Time
 }
 
+type RefreshToken struct {
+	Token     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	UserID    uuid.UUID
+	ExpiresAt time.Time
+	RevokedAt sql.NullTime
+}
+
 type Task struct {
 	ID          uuid.UUID
 	BoardID     uuid.UUID
