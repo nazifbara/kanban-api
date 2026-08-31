@@ -38,7 +38,7 @@ where id = $1
 RETURNING *;
 
 -- name: CreateTask :one
-INSERT INTO tasks (id, board_id, column_id, title, description, position, created_at, updated_at)
+INSERT INTO tasks (id, creator_id, board_id, column_id, title, description, position, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     $1,
@@ -46,6 +46,7 @@ VALUES (
     $3,
     $4,
     $5,
+    $6,
     NOW(),
     NOW()
 ) 

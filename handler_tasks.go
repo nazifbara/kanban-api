@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/nazifbara/kanban-api/internal/apierrors"
 	"github.com/nazifbara/kanban-api/internal/database"
 	"github.com/nazifbara/kanban-api/internal/tasks"
@@ -182,6 +183,7 @@ func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
 	params, err := decodeJSONBody[tasks.CreateParam](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
@@ -223,6 +225,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 				Description: sql.NullString{String: params.Description, Valid: true},
 				Title:       params.Title,
 				Position:    params.Position,
+				CreatorID:   userID,
 			},
 		)
 		if err != nil {
