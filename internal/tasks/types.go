@@ -9,6 +9,7 @@ import (
 
 type Task struct {
 	ID          uuid.UUID `json:"id"`
+	CreatorID   uuid.UUID `json:"creator_id"`
 	BoardID     uuid.UUID `json:"board_id"`
 	ColumnID    uuid.UUID `json:"column_id"`
 	Title       string    `json:"title"`
@@ -47,6 +48,7 @@ func DBToTask(dbTask database.Task) Task {
 		ColumnID:    dbTask.ColumnID,
 		Title:       dbTask.Title,
 		Description: dbTask.Description.String,
+		CreatorID:   dbTask.CreatorID,
 		CreatedAt:   dbTask.CreatedAt,
 		UpdatedAt:   dbTask.UpdatedAt,
 		Position:    int(dbTask.Position),
