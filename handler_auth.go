@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -9,6 +10,26 @@ import (
 	"github.com/nazifbara/kanban-api/internal/auth"
 	"github.com/nazifbara/kanban-api/internal/database"
 )
+
+var authContextKey contextKey = "auth_context"
+
+func (s *server) withAuth(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, err := auth.GetBearerToken(r.Header)
+		if err != nil {
+			s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusUnauthorized, err))
+			return
+		}
+		userID, err := auth.ValidateJWT(token, s.jwtSecret)
+		if err != nil {
+			s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusUnauthorized, err))
+			return
+		}
+
+		r = r.WithContext(context.WithValue(r.Context(), authContextKey, userID))
+		next(w, r)
+	})
+}
 
 func (s *server) handlerRefresh(w http.ResponseWriter, r *http.Request) {
 	token, err := auth.GetBearerToken(r.Header)
