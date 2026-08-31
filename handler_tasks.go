@@ -100,6 +100,9 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 				return apierrors.FromErr(http.StatusBadRequest, err)
 			}
 			err = tasks.ChangeTaskColumn(r.Context(), q, task, *param.ColumnID, *param.Position)
+			if err != nil {
+				return apierrors.FromDBErr(err)
+			}
 		} else if param.Position != nil && *param.Position != int32(task.Position) {
 			after := min(*param.Position, task.Position)
 			before := max(*param.Position, task.Position)
@@ -132,14 +135,13 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 					ColumnID: task.ColumnID,
 				},
 			)
+			if err != nil {
+				return apierrors.FromDBErr(err)
+			}
 		} else {
 			if err := tasks.ValidatePatchParam(param, nil); err != nil {
 				return apierrors.FromErr(http.StatusBadRequest, err)
 			}
-		}
-
-		if err != nil {
-			return err
 		}
 
 		patch := tasks.PrepareTaskPatch(param)
@@ -150,7 +152,6 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		}
 		return nil
 	})
-
 	if err != nil {
 		s.respondWithError(r.Context(), w, err)
 		return
