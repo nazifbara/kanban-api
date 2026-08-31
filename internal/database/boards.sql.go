@@ -13,24 +13,26 @@ import (
 )
 
 const createBoard = `-- name: CreateBoard :one
-INSERT INTO boards (id, name, description, created_at, updated_at)
+INSERT INTO boards (id, creator_id, name, description, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     $1,
     $2,
+    $3,
     NOw(),
     NOW()
 )
-RETURNING id, name, created_at, updated_at, description
+RETURNING id, name, created_at, updated_at, description, creator_id
 `
 
 type CreateBoardParams struct {
+	CreatorID   uuid.UUID
 	Name        string
 	Description sql.NullString
 }
 
 func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board, error) {
-	row := q.db.QueryRowContext(ctx, createBoard, arg.Name, arg.Description)
+	row := q.db.QueryRowContext(ctx, createBoard, arg.CreatorID, arg.Name, arg.Description)
 	var i Board
 	err := row.Scan(
 		&i.ID,
@@ -38,12 +40,13 @@ func (q *Queries) CreateBoard(ctx context.Context, arg CreateBoardParams) (Board
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
+		&i.CreatorID,
 	)
 	return i, err
 }
 
 const deleteBoard = `-- name: DeleteBoard :one
-DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at, description
+DELETE FROM boards WHERE id = $1 RETURNING id, name, created_at, updated_at, description, creator_id
 `
 
 func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -55,12 +58,13 @@ func (q *Queries) DeleteBoard(ctx context.Context, id uuid.UUID) (Board, error) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
+		&i.CreatorID,
 	)
 	return i, err
 }
 
 const getAllBoards = `-- name: GetAllBoards :many
-SELECT id, name, created_at, updated_at, description FROM boards ORDER BY created_at DESC
+SELECT id, name, created_at, updated_at, description, creator_id FROM boards ORDER BY created_at DESC
 `
 
 func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
@@ -78,6 +82,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.Description,
+			&i.CreatorID,
 		); err != nil {
 			return nil, err
 		}
@@ -93,7 +98,7 @@ func (q *Queries) GetAllBoards(ctx context.Context) ([]Board, error) {
 }
 
 const getBoard = `-- name: GetBoard :one
-SELECT id, name, created_at, updated_at, description FROM boards WHERE id = $1 FOR SHARE
+SELECT id, name, created_at, updated_at, description, creator_id FROM boards WHERE id = $1 FOR SHARE
 `
 
 func (q *Queries) GetBoard(ctx context.Context, id uuid.UUID) (Board, error) {
@@ -105,6 +110,7 @@ func (q *Queries) GetBoard(ctx context.Context, id uuid.UUID) (Board, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
+		&i.CreatorID,
 	)
 	return i, err
 }
@@ -119,7 +125,7 @@ func (q *Queries) TruncateBoards(ctx context.Context) error {
 }
 
 const updateBoard = `-- name: UpdateBoard :one
-UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description
+UPDATE boards SET name = $1 WHERE id = $2 RETURNING id, name, created_at, updated_at, description, creator_id
 `
 
 type UpdateBoardParams struct {
@@ -136,6 +142,7 @@ func (q *Queries) UpdateBoard(ctx context.Context, arg UpdateBoardParams) (Board
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Description,
+		&i.CreatorID,
 	)
 	return i, err
 }

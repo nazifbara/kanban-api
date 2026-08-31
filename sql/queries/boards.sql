@@ -11,11 +11,12 @@ SELECT * FROM boards WHERE id = $1 FOR SHARE;
 SELECT * FROM boards ORDER BY created_at DESC;
 
 -- name: CreateBoard :one
-INSERT INTO boards (id, name, description, created_at, updated_at)
+INSERT INTO boards (id, creator_id, name, description, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
     $1,
     $2,
+    $3,
     NOw(),
     NOW()
 )
