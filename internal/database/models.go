@@ -17,6 +17,7 @@ type Board struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	Description sql.NullString
+	CreatorID   uuid.UUID
 }
 
 type Column struct {

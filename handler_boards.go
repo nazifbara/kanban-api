@@ -17,6 +17,7 @@ type Board struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
+	CreatorID   uuid.UUID `json:"creator_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -91,6 +92,8 @@ func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
+
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
@@ -105,6 +108,7 @@ func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 	dbBoard, err := s.store.CreateBoard(r.Context(), database.CreateBoardParams{
 		Name:        params.Name,
 		Description: sql.NullString{String: params.Description, Valid: params.Description != ""},
+		CreatorID:   userID,
 	})
 	if err != nil {
 		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
@@ -127,6 +131,7 @@ func dbToBoard(dbBoard database.Board) Board {
 		ID:          dbBoard.ID,
 		Name:        dbBoard.Name,
 		Description: dbBoard.Description.String,
+		CreatorID:   dbBoard.CreatorID,
 		CreatedAt:   dbBoard.CreatedAt,
 		UpdatedAt:   dbBoard.UpdatedAt,
 	}
