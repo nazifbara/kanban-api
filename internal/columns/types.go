@@ -11,6 +11,7 @@ type Column struct {
 	ID          uuid.UUID `json:"id"`
 	Title       string    `json:"title"`
 	BoardID     uuid.UUID `json:"board_id"`
+	CreatorID   uuid.UUID `json:"creator_id"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	Description string    `json:"description"`
@@ -54,6 +55,7 @@ func DBToColumn(dbColumn database.Column) Column {
 		UpdatedAt:   dbColumn.UpdatedAt,
 		Description: dbColumn.Description.String,
 		BoardID:     dbColumn.BoardID,
+		CreatorID:   dbColumn.CreatorID,
 		Position:    int(dbColumn.Position),
 	}
 }

@@ -149,6 +149,8 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
+	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
+
 	params, err := decodeJSONBody[columns.CreateParams](r)
 	if err != nil {
 		s.respondWithError(r.Context(), w, malformedBodyErr)
@@ -182,9 +184,10 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
 			database.CreateColumnParams{
-				BoardID:  params.BoardID,
-				Title:    params.Title,
-				Position: params.Position,
+				BoardID:   params.BoardID,
+				Title:     params.Title,
+				Position:  params.Position,
+				CreatorID: userID,
 			},
 		)
 		if err != nil {

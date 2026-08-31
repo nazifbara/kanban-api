@@ -31,14 +31,15 @@ UPDATE columns SET position = $2 WHERE id = $1;
 DELETE FROM columns WHERE id = $1;
 
 -- name: CreateColumn :one
-INSERT INTO columns (id, title, created_at, updated_at, board_id, position)
+INSERT INTO columns (id, title, created_at, updated_at, board_id, position, creator_id)
 VALUES (
     gen_random_uuid(),
     $1,
     NOW(),
     NOW(),
     $2,
-    $3
+    $3,
+    $4
 ) RETURNING *;
 
 -- name: GetColumns :many
