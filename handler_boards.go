@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
@@ -27,81 +28,116 @@ type BoardParam struct {
 	Description string `json:"description"`
 }
 
+var boardContextKey contextKey = "board_context"
+
+func getBoardFromCtx(ctx context.Context) (*database.Board, error) {
+	if board, ok := ctx.Value(boardContextKey).(*database.Board); ok {
+		return board, nil
+	}
+	return nil, errors.New("board context value not set")
+}
+
+func (s *server) withBoardAccess(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		boardID, _ := utils.GetIdFromPath(r, "boardID")
+		if boardID == uuid.Nil {
+			respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "missing boardID"))
+			return
+		}
+		userID, err := getUserIDFromCtx(r.Context())
+		if err != nil {
+			respondWithError(r.Context(), w, errors.New("auth context not set"))
+			return
+		}
+		board, err := s.store.GetBoard(r.Context(), boardID)
+		if err != nil {
+			respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+			return
+		}
+		if board.CreatorID != userID {
+			respondWithError(r.Context(), w, apierrors.New(http.StatusForbidden, "board access denied"))
+			return
+		}
+		r = r.WithContext(context.WithValue(r.Context(), boardContextKey, &board))
+		next(w, r)
+	}
+}
+
 func (s *server) hanlderUpdateBoard(w http.ResponseWriter, r *http.Request) {
-	boardID, err := utils.GetIdFromPath(r, "boardID")
+	board, err := getBoardFromCtx(r.Context())
 	if err != nil {
-		log.Printf("invalid board id: %v", err)
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, err)
 		return
 	}
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	if params.Name == "" {
-		s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "body.name is required"))
+		respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "body.name is required"))
 		return
 	}
-	dbBoard, err := s.store.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: boardID})
+	dbBoard, err := s.store.UpdateBoard(r.Context(), database.UpdateBoardParams{Name: params.Name, ID: board.ID})
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	s.respondWithJSON(w, 201, dbToBoard(dbBoard))
+	respondWithJSON(r.Context(), w, 201, dbToBoard(dbBoard))
 }
 
 func (s *server) handlerDeleteBoard(w http.ResponseWriter, r *http.Request) {
-	boardID, err := utils.GetIdFromPath(r, "boardID")
+	board, err := getBoardFromCtx(r.Context())
 	if err != nil {
-		log.Printf("invalid board id: %v", err)
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	_, err = s.store.DeleteBoard(r.Context(), boardID)
+	_, err = s.store.DeleteBoard(r.Context(), board.ID)
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) handlerGetBoard(w http.ResponseWriter, r *http.Request) {
-	boardID, err := utils.GetIdFromPath(r, "boardID")
+	dbBoard, err := getBoardFromCtx(r.Context())
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	dbBoard, err := s.store.GetBoard(r.Context(), boardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	s.respondWithJSON(w, http.StatusOK, dbToBoard(dbBoard))
+	respondWithJSON(r.Context(), w, http.StatusOK, dbToBoard(*dbBoard))
 }
 
 func (s *server) handlerGetAllBoards(w http.ResponseWriter, r *http.Request) {
-	dbBoards, err := s.store.GetAllBoards(r.Context())
+	userID, err := getUserIDFromCtx(r.Context())
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, err)
+		return
+	}
+	dbBoards, err := s.store.GetUserBoards(r.Context(), userID)
+	if err != nil {
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 	boards := dbToBoardSlice(dbBoards)
-
-	s.respondWithJSON(w, 200, boards)
+	respondWithJSON(r.Context(), w, 200, boards)
 }
 
 func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
-
+	userID, err := getUserIDFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
 	params, err := decodeJSONBody[BoardParam](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	if err := validateBoardParams(params); err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
@@ -111,11 +147,11 @@ func (s *server) handlerCreateBoard(w http.ResponseWriter, r *http.Request) {
 		CreatorID:   userID,
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
 
-	s.respondWithJSON(w, 201, dbToBoard(dbBoard))
+	respondWithJSON(r.Context(), w, 201, dbToBoard(dbBoard))
 }
 
 func validateBoardParams(param BoardParam) error {
@@ -138,7 +174,7 @@ func dbToBoard(dbBoard database.Board) Board {
 }
 
 func dbToBoardSlice(dbBoards []database.Board) []Board {
-	var boards []Board
+	boards := []Board{}
 	for _, dbBoard := range dbBoards {
 		boards = append(boards, dbToBoard(dbBoard))
 	}

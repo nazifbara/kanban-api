@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -10,6 +13,38 @@ import (
 	"github.com/nazifbara/kanban-api/internal/database"
 	"github.com/nazifbara/kanban-api/internal/utils"
 )
+
+var columnContextKey contextKey = "column_key"
+
+func getColumnFromCtx(ctx context.Context) (*database.Column, error) {
+	if column, ok := ctx.Value(columnContextKey).(*database.Column); ok {
+		return column, nil
+	}
+	return nil, errors.New("column context value not set")
+}
+
+func (s *server) withColumnAccess(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		boardID, _ := utils.GetIdFromPath(r, "boardID")
+		columnID, _ := utils.GetIdFromPath(r, "columnID")
+		if boardID == uuid.Nil || columnID == uuid.Nil {
+			respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "missing boardID or columnID"))
+			return
+		}
+		column, err := s.store.GetColumn(r.Context(), columnID)
+		if err != nil {
+			respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+			return
+		}
+		if column.BoardID != boardID {
+			respondWithError(r.Context(), w, apierrors.New(http.StatusNotFound, fmt.Sprintf("column %s not found in board %s", columnID, boardID)))
+			return
+		}
+		fmt.Println("column access")
+		r = r.WithContext(context.WithValue(r.Context(), columnContextKey, &column))
+		next.ServeHTTP(w, r)
+	}
+}
 
 func prepareColumnPatch(params columns.PatchParams) database.UpdateColumnParams {
 	var patch database.UpdateColumnParams
@@ -26,18 +61,20 @@ func prepareColumnPatch(params columns.PatchParams) database.UpdateColumnParams 
 }
 
 func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
-	columnID, err := utils.GetIdFromPath(r, "columnID")
+	ctxColumn, err := getColumnFromCtx(r.Context())
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, err)
+		return
 	}
+
 	patchParams, err := decodeJSONBody[columns.PatchParams](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	var dbColumn database.Column
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		oldColumn, err := q.GetColumn(r.Context(), columnID)
+		oldColumn, err := q.GetColumn(r.Context(), ctxColumn.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
@@ -49,7 +86,7 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 			return apierrors.FromErr(http.StatusBadRequest, err)
 		}
 		patch := prepareColumnPatch(patchParams)
-		patch.ID = columnID
+		patch.ID = ctxColumn.ID
 
 		if patchParams.Position != nil && *patchParams.Position != oldColumn.Position {
 			after := min(*patchParams.Position, oldColumn.Position)
@@ -86,20 +123,21 @@ func (s *server) handlerPatchColumn(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusOK, columns.DBToColumn(dbColumn))
+	respondWithJSON(r.Context(), w, http.StatusOK, columns.DBToColumn(dbColumn))
 }
 
 func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
-	columnID, err := utils.GetIdFromPath(r, "columnID")
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+	ctxColumn, ok := r.Context().Value(columnContextKey).(*database.Column)
+	if !ok {
+		respondWithError(r.Context(), w, errors.New("column context not set"))
 		return
 	}
-	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		dbColumn, err := q.GetColumn(r.Context(), columnID)
+
+	err := s.store.execTx(r.Context(), func(q *database.Queries) error {
+		dbColumn, err := q.GetColumn(r.Context(), ctxColumn.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
@@ -110,28 +148,29 @@ func (s *server) handlerDeleteColumn(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
-		err = q.DeleteColumn(r.Context(), columnID)
+		err = q.DeleteColumn(r.Context(), ctxColumn.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
-	param, err := decodeJSONBody[columns.ColumnBoardID](r)
-	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+	board, ok := r.Context().Value(boardContextKey).(*database.Board)
+	if !ok {
+		respondWithError(r.Context(), w, errors.New("board context not set"))
 		return
 	}
+
 	var dbColumns []database.Column
-	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		board, err := q.GetBoard(r.Context(), param.BoardID)
+	err := s.store.execTx(r.Context(), func(q *database.Queries) error {
+		board, err := q.GetBoard(r.Context(), board.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
@@ -142,41 +181,44 @@ func (s *server) handlerBoardColumns(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, 200, columns.DBToColumnSlice(dbColumns))
+	respondWithJSON(r.Context(), w, 200, columns.DBToColumnSlice(dbColumns))
 }
 
 func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
-
-	params, err := decodeJSONBody[columns.CreateParams](r)
+	userID, err := getUserIDFromCtx(r.Context())
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, err)
+	}
+	board, ok := r.Context().Value(boardContextKey).(*database.Board)
+	if !ok {
+		respondWithError(r.Context(), w, errors.New("board context not set"))
 		return
 	}
-	if params.BoardID == uuid.Nil {
-		s.respondWithError(r.Context(), w, apierrors.New(http.StatusBadRequest, "body.board_id is required"))
+	params, err := decodeJSONBody[columns.CreateParams](r)
+	if err != nil {
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	var dbColumn database.Column
 	err = s.store.execTx(r.Context(), func(qtx *database.Queries) error {
-		count, err := qtx.CountColumns(r.Context(), params.BoardID)
+		count, err := qtx.CountColumns(r.Context(), board.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
 		if err := columns.ValidateColumn(params, int(count)); err != nil {
 			return apierrors.FromErr(http.StatusBadRequest, err)
 		}
-		_, err = qtx.GetBoard(r.Context(), params.BoardID)
+		_, err = qtx.GetBoard(r.Context(), board.ID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
 		}
 		err = qtx.ShiftColumnsFrom(r.Context(), database.ShiftColumnsFromParams{
 			Start:   params.Position,
 			Delta:   1,
-			BoardID: params.BoardID,
+			BoardID: board.ID,
 		})
 		if err != nil {
 			return apierrors.FromDBErr(err)
@@ -184,7 +226,7 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		dbColumn, err = qtx.CreateColumn(
 			r.Context(),
 			database.CreateColumnParams{
-				BoardID:   params.BoardID,
+				BoardID:   board.ID,
 				Title:     params.Title,
 				Position:  params.Position,
 				CreatorID: userID,
@@ -196,8 +238,8 @@ func (s *server) handlerCreateColumn(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusCreated, columns.DBToColumn(dbColumn))
+	respondWithJSON(r.Context(), w, http.StatusCreated, columns.DBToColumn(dbColumn))
 }

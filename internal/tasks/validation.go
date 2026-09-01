@@ -33,9 +33,6 @@ func ValidateCreateParam(params CreateParam, maxPosition int) error {
 	if params.Position < 0 || params.Position > utils.IntToInt32(maxPosition) {
 		errs = append(errs, fmt.Errorf("body.position out of range [0, %d]", maxPosition))
 	}
-	if params.ColumnID == uuid.Nil {
-		errs = append(errs, errors.New("body.column_id is required"))
-	}
 	if params.Title == "" {
 		errs = append(errs, errors.New("body.title is required"))
 	}

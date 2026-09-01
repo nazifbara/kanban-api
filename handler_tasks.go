@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -12,23 +13,22 @@ import (
 )
 
 func (s *server) handlerGetBoardTasks(w http.ResponseWriter, r *http.Request) {
-	boardID, err := utils.GetIdFromPath(r, "boardID")
+	board, ok := r.Context().Value(boardContextKey).(*database.Board)
+	if !ok {
+		respondWithError(r.Context(), w, errors.New("board context not set"))
+	}
+	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), board.ID)
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), boardID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
-		return
-	}
-	s.respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTaskSlice))
+	respondWithJSON(r.Context(), w, http.StatusOK, tasks.DBToTaskSlice(dbTaskSlice))
 }
 
 func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
@@ -49,7 +49,7 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
 
@@ -59,13 +59,13 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 	param, err := decodeJSONBody[tasks.PatchParam](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
@@ -76,6 +76,9 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 			return apierrors.FromDBErr(err)
 		}
 		var destinationColumn database.Column
+		if param.ColumnID != nil && *param.ColumnID == uuid.Nil {
+			return apierrors.New(http.StatusBadRequest, "invalid column ID")
+		}
 		if param.ColumnID != nil && *param.ColumnID != task.ColumnID {
 			destinationColumn, err = q.GetColumn(r.Context(), *param.ColumnID)
 			if err != nil {
@@ -154,50 +157,50 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusOK, tasks.DBToTask(updatedTask))
+	respondWithJSON(r.Context(), w, http.StatusOK, tasks.DBToTask(updatedTask))
 }
 
 func (s *server) handlerColumnTasks(w http.ResponseWriter, r *http.Request) {
-	columnID, err := utils.GetIdFromPath(r, "columnID")
+	ctxColumn, err := getColumnFromCtx(r.Context())
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
-		return
-	}
-	_, err = s.store.GetColumn(r.Context(), columnID)
-	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, err)
 		return
 	}
 	dbTasks, err := s.store.GetColumnTasks(
 		r.Context(),
-		columnID,
+		ctxColumn.ID,
 	)
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromDBErr(err))
+		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
 	}
-	s.respondWithJSON(w, http.StatusOK, tasks.DBToTaskSlice(dbTasks))
+	respondWithJSON(r.Context(), w, http.StatusOK, tasks.DBToTaskSlice(dbTasks))
 }
 
 func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
-	userID, _ := r.Context().Value(authContextKey).(uuid.UUID)
+	userID, err := getUserIDFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
+	ctxColumn, err := getColumnFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
 	params, err := decodeJSONBody[tasks.CreateParam](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 	var dbTask database.Task
 	err = s.store.execTx(r.Context(), func(q *database.Queries) error {
-		dbColumn, err := q.GetColumn(r.Context(), params.ColumnID)
-		if err != nil {
-			return apierrors.FromDBErr(err)
-		}
 		count, err := q.CountTasks(
 			r.Context(),
-			params.ColumnID,
+			ctxColumn.ID,
 		)
 		if err != nil {
 			return apierrors.FromDBErr(err)
@@ -211,7 +214,7 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 				// include the previous task holding params.Position
 				Start:    int32(params.Position),
 				Delta:    1,
-				ColumnID: dbColumn.ID,
+				ColumnID: ctxColumn.ID,
 			},
 		)
 		if err != nil {
@@ -220,8 +223,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		dbTask, err = q.CreateTask(
 			r.Context(),
 			database.CreateTaskParams{
-				BoardID:     dbColumn.BoardID,
-				ColumnID:    dbColumn.ID,
+				BoardID:     ctxColumn.BoardID,
+				ColumnID:    ctxColumn.ID,
 				Description: sql.NullString{String: params.Description, Valid: true},
 				Title:       params.Title,
 				Position:    params.Position,
@@ -234,8 +237,8 @@ func (s *server) handlerCreateTask(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
-	s.respondWithJSON(w, http.StatusCreated, tasks.DBToTask(dbTask))
+	respondWithJSON(r.Context(), w, http.StatusCreated, tasks.DBToTask(dbTask))
 }

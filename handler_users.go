@@ -12,13 +12,13 @@ import (
 func (s *server) handlerSignUp(w http.ResponseWriter, r *http.Request) {
 	params, err := decodeJSONBody[users.UserParam](r)
 	if err != nil {
-		s.respondWithError(r.Context(), w, malformedBodyErr)
+		respondWithError(r.Context(), w, malformedBodyErr)
 		return
 	}
 
 	err = users.ValidateParams(params)
 	if err != nil {
-		s.respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
+		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
 		return
 	}
 
@@ -48,9 +48,9 @@ func (s *server) handlerSignUp(w http.ResponseWriter, r *http.Request) {
 		return nil
 	})
 	if err != nil {
-		s.respondWithError(r.Context(), w, err)
+		respondWithError(r.Context(), w, err)
 		return
 	}
 
-	s.respondWithJSON(w, http.StatusCreated, users.DBToUser(user))
+	respondWithJSON(r.Context(), w, http.StatusCreated, users.DBToUser(user))
 }
