@@ -7,8 +7,8 @@ DELETE FROM boards WHERE id = $1 RETURNING *;
 -- name: GetBoard :one
 SELECT * FROM boards WHERE id = $1 FOR SHARE;
 
--- name: GetAllBoards :many
-SELECT * FROM boards ORDER BY created_at DESC;
+-- name: GetUserBoards :many
+SELECT * FROM boards WHERE creator_id = $1 ORDER BY created_at DESC;
 
 -- name: CreateBoard :one
 INSERT INTO boards (id, creator_id, name, description, created_at, updated_at)
@@ -21,6 +21,3 @@ VALUES (
     NOW()
 )
 RETURNING *;
-
--- name: TruncateBoards :exec
-TRUNCATE TABLE boards CASCADE;

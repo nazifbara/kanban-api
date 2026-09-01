@@ -51,25 +51,25 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 	mux.HandleFunc("POST /api/sign-up", s.handlerSignUp)
 	mux.Handle("POST /api/boards", s.withAuth(s.handlerCreateBoard))
 	mux.Handle("GET /api/boards", s.withAuth(s.handlerGetAllBoards))
-	mux.Handle("GET /api/boards/{boardID}", s.withAuth(s.handlerGetBoard))
-	mux.Handle("DELETE /api/boards/{boardID}", s.withAuth(s.handlerDeleteBoard))
-	mux.Handle("PUT /api/boards/{boardID}", s.withAuth(s.hanlderUpdateBoard))
-	mux.Handle("POST /api/columns", s.withAuth(s.handlerCreateColumn))
-	mux.Handle("GET /api/columns", s.withAuth(s.handlerBoardColumns))
-	mux.Handle("DELETE /api/columns/{columnID}", s.withAuth(s.handlerDeleteColumn))
-	mux.Handle("PATCH /api/columns/{columnID}", s.withAuth(s.handlerPatchColumn))
-	mux.Handle("POST /api/tasks", s.withAuth(s.handlerCreateTask))
-	mux.Handle("PATCH /api/tasks/{taskID}", s.withAuth(s.handlerUpdateTask))
-	mux.Handle("GET /api/columns/{columnID}/tasks", s.withAuth(s.handlerColumnTasks))
-	mux.Handle("GET /api/boards/{boardID}/tasks", s.withAuth(s.handlerGetBoardTasks))
-	mux.Handle("DELETE /api/tasks/{taskID}", s.withAuth(s.handlerDeleteTask))
+	mux.Handle("GET /api/boards/{boardID}", s.withAuth(s.withBoardAccess(s.handlerGetBoard)))
+	mux.Handle("DELETE /api/boards/{boardID}", s.withAuth(s.withBoardAccess(s.handlerDeleteBoard)))
+	mux.Handle("PUT /api/boards/{boardID}", s.withAuth(s.withBoardAccess(s.hanlderUpdateBoard)))
+	mux.Handle("POST /api/boards/{boardID}/columns", s.withAuth(s.withBoardAccess(s.handlerCreateColumn)))
+	mux.Handle("GET /api/boards/{boardID}/columns", s.withAuth(s.withBoardAccess(s.handlerBoardColumns)))
+	mux.Handle("DELETE /api/boards/{boardID}/columns/{columnID}", s.withAuth(s.withBoardAccess(s.withColumnAccess(s.handlerDeleteColumn))))
+	mux.Handle("PATCH /api/boards/{boardID}/columns/{columnID}", s.withAuth(s.withBoardAccess(s.withColumnAccess(s.handlerPatchColumn))))
+	mux.Handle("POST /api/boards/{boardID}/columns/{columnID}/tasks", s.withAuth(s.withBoardAccess(s.withColumnAccess(s.handlerCreateTask))))
+	mux.Handle("PATCH /api/boards/{boardID}/tasks/{taskID}", s.withAuth(s.withBoardAccess(s.handlerUpdateTask)))
+	mux.Handle("GET /api/boards/{boardID}/columns/{columnID}/tasks", s.withAuth(s.withBoardAccess(s.withColumnAccess(s.handlerColumnTasks))))
+	mux.Handle("GET /api/boards/{boardID}/tasks", s.withAuth(s.withBoardAccess(s.handlerGetBoardTasks)))
+	mux.Handle("DELETE /api/boards/{boardID}/tasks/{taskID}", s.withAuth(s.withBoardAccess(s.handlerDeleteTask)))
 	mux.HandleFunc("POST /reset", s.handlerReset)
 
 	return s
 }
 
 func (s *server) handlerReset(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.TruncateBoards(r.Context()); err != nil {
+	if err := s.store.TruncateIdentities(r.Context()); err != nil {
 		w.WriteHeader(500)
 		return
 	}

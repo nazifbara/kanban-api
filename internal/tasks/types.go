@@ -20,10 +20,9 @@ type Task struct {
 }
 
 type CreateParam struct {
-	ColumnID    uuid.UUID `json:"column_id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Position    int32     `json:"position"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Position    int32  `json:"position"`
 }
 
 type PatchParam struct {

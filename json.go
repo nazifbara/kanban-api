@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/nazifbara/kanban-api/internal/apierrors"
@@ -20,22 +19,28 @@ func decodeJSONBody[T any](r *http.Request) (T, error) {
 	return params, nil
 }
 
-func (s *server) respondWithJSON(w http.ResponseWriter, code int, payload any) {
+func respondWithJSON(ctx context.Context, w http.ResponseWriter, code int, payload any) {
+	logCtx, ok := ctx.Value(logContextKey).(*LogContext)
+
 	data, err := json.Marshal(payload)
 	if err != nil {
-		s.logger.Error("couldn't marshal response data", slog.Any("error", err))
+		if ok {
+			logCtx.Error = err
+		}
 		w.WriteHeader(500)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if _, err := w.Write(data); err != nil {
-		s.logger.Error("couldn't write response data", slog.Any("error", err))
+		if ok {
+			logCtx.Error = err
+		}
 		w.WriteHeader(500)
 	}
 }
 
-func (s *server) respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
+func respondWithError(ctx context.Context, w http.ResponseWriter, err error) {
 	statusCode := 500
 	if apiErr, ok := err.(apierrors.APIErr); ok {
 		statusCode = apiErr.StatusCode
@@ -58,5 +63,5 @@ func (s *server) respondWithError(ctx context.Context, w http.ResponseWriter, er
 	if logCtx, ok := ctx.Value(logContextKey).(*LogContext); ok {
 		logCtx.Error = pkgerr.WithStack(errors.Join(errs...))
 	}
-	s.respondWithJSON(w, statusCode, response)
+	respondWithJSON(ctx, w, statusCode, response)
 }

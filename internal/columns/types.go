@@ -19,19 +19,14 @@ type Column struct {
 }
 
 type CreateParams struct {
-	Title       string    `json:"title"`
-	BoardID     uuid.UUID `json:"board_id"`
-	Position    int32     `json:"position"`
-	Description string    `json:"description"`
+	Title       string `json:"title"`
+	Position    int32  `json:"position"`
+	Description string `json:"description"`
 }
 type PatchParams struct {
 	Title       *string `json:"title"`
 	Description *string `json:"description"`
 	Position    *int32  `json:"position"`
-}
-
-type ColumnBoardID struct {
-	BoardID uuid.UUID `json:"board_id"`
 }
 
 type PositionsParams struct {
