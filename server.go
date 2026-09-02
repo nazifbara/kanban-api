@@ -73,6 +73,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 func (s *server) handlerReset(w http.ResponseWriter, r *http.Request) {
 	if s.env != "dev" {
 		w.WriteHeader(http.StatusNotFound)
+		return
 	}
 	if err := s.store.TruncateIdentities(r.Context()); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
