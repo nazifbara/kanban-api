@@ -25,6 +25,7 @@ type server struct {
 	logger     *slog.Logger
 	cancel     context.CancelFunc
 	jwtSecret  string
+	env        string
 }
 
 func newServer(port int, store *store, logger *slog.Logger, cancel context.CancelFunc) *server {
@@ -44,6 +45,7 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 		store:      store,
 		logger:     logger,
 		cancel:     cancel,
+		env:        os.Getenv("ENV"),
 	}
 
 	mux.HandleFunc("POST /api/refresh", s.handlerRefresh)
@@ -69,11 +71,14 @@ func newServer(port int, store *store, logger *slog.Logger, cancel context.Cance
 }
 
 func (s *server) handlerReset(w http.ResponseWriter, r *http.Request) {
+	if s.env != "dev" {
+		w.WriteHeader(http.StatusNotFound)
+	}
 	if err := s.store.TruncateIdentities(r.Context()); err != nil {
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) start() error {

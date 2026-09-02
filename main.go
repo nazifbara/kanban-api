@@ -24,8 +24,7 @@ import (
 
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Println("couldn't load env variables")
-		os.Exit(1)
+		log.Println("no .env file found; relying on system environment variables")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	httpPort := flag.Int("port", 8080, "port to listen on")
