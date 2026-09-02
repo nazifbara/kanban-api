@@ -40,7 +40,6 @@ func (s *server) withColumnAccess(next http.HandlerFunc) http.HandlerFunc {
 			respondWithError(r.Context(), w, apierrors.New(http.StatusNotFound, fmt.Sprintf("column %s not found in board %s", columnID, boardID)))
 			return
 		}
-		fmt.Println("column access")
 		r = r.WithContext(context.WithValue(r.Context(), columnContextKey, &column))
 		next.ServeHTTP(w, r)
 	}
