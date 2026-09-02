@@ -1,0 +1,7 @@
+FROM  debian:stable-slim
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists
+
+COPY kanban-api /usr/bin/kanban-api
+
+CMD ["kanban-api"]

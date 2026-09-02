@@ -1,4 +1,13 @@
 services:
+  api:
+    image: zifkage/kanban-api
+    container_name: kanban-api
+    environment:
+      API_PORT: 8080
+      DB_URL: postgres://testuser:testpassword@postgres_db:5432/kanban-db?sslmode=disable
+      JWT_SECRET: Jw3XDepNwBl3WRe1k0XDI65X/iLdsV/dAOmGyM/jRaftF/wEifBHQFGLYQEcMJhCchUQyBwReSk8zZNTt3goMA==
+    ports:
+      - "8080:8080"
   postgres_db:
     image: postgres:16-alpine
     container_name: go_postgres_db
