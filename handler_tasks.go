@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"errors"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -13,11 +12,12 @@ import (
 )
 
 func (s *server) handlerGetBoardTasks(w http.ResponseWriter, r *http.Request) {
-	board, ok := r.Context().Value(boardContextKey).(*database.Board)
-	if !ok {
-		respondWithError(r.Context(), w, errors.New("board context not set"))
+	ctxBoard, err := getBoardFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
 	}
-	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), board.ID)
+	dbTaskSlice, err := s.store.GetBoardTasks(r.Context(), ctxBoard.ID)
 	if err != nil {
 		respondWithError(r.Context(), w, apierrors.FromDBErr(err))
 		return
@@ -26,6 +26,11 @@ func (s *server) handlerGetBoardTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
+	ctxBoard, err := getBoardFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
 	taskID, err := utils.GetIdFromPath(r, "taskID")
 	if err != nil {
 		respondWithError(r.Context(), w, apierrors.FromErr(http.StatusBadRequest, err))
@@ -35,6 +40,9 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 		task, err := q.GetTaskForShare(r.Context(), taskID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
+		}
+		if task.BoardID != ctxBoard.ID {
+			return apierrors.New(http.StatusNotFound, "task not found in the board")
 		}
 		err = q.ShiftTasksFrom(
 			r.Context(),
@@ -57,6 +65,11 @@ func (s *server) handlerDeleteTask(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
+	ctxBoard, err := getBoardFromCtx(r.Context())
+	if err != nil {
+		respondWithError(r.Context(), w, err)
+		return
+	}
 	param, err := decodeJSONBody[tasks.PatchParam](r)
 	if err != nil {
 		respondWithError(r.Context(), w, malformedBodyErr)
@@ -74,6 +87,9 @@ func (s *server) handlerUpdateTask(w http.ResponseWriter, r *http.Request) {
 		task, err := q.GetTaskForUpdate(r.Context(), taskID)
 		if err != nil {
 			return apierrors.FromDBErr(err)
+		}
+		if task.BoardID != ctxBoard.ID {
+			return apierrors.New(http.StatusNotFound, "task not found in the board")
 		}
 		var destinationColumn database.Column
 		if param.ColumnID != nil && *param.ColumnID == uuid.Nil {
