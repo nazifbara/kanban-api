@@ -4,6 +4,33 @@ A REST API for managing Kanban boards, columns, and tasks, with JWT-based
 authentication and per-user data isolation (a user can only see and modify
 boards they created).
 
+## Live demo
+
+A running instance is deployed on Cloud Run (see [CI/CD](#cicd)):
+
+```
+https://kanban-api-740805868287.us-central1.run.app
+```
+
+Try it with `curl`:
+
+```bash
+BASE_URL="https://kanban-api-740805868287.us-central1.run.app"
+
+curl -X POST "$BASE_URL/api/sign-up" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"a-password","first_name":"Ada","last_name":"Lovelace"}'
+
+curl -X POST "$BASE_URL/api/login" \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"a-password"}'
+```
+
+`POST /reset` is disabled on this instance (it only works when
+`ENV=dev` on the server — see [Resetting data](#resetting-data)), so
+don't expect a clean slate; create your own board rather than assuming
+IDs from a fresh database.
+
 ## Tech stack
 
 - **Go** — `net/http` standard library router (Go 1.22+ pattern-based
@@ -17,10 +44,53 @@ boards they created).
   refresh tokens
 - **UUIDs** as primary keys everywhere (`github.com/google/uuid`)
 
-## Prerequisites
+## Database schema
 
-- Go (recent version — the router relies on Go 1.22's method+wildcard
-  patterns)
+Migrations live in `sql/schema/` and run in numbered order via `goose`.
+Two things happened over the course of this migration history that are
+worth knowing about:
+
+1. Columns started life as a table called `states` (migration `002`),
+   and were renamed to `columns` in `005` — along with the board column
+   `state_positions` becoming `column_positions`. That position-tracking
+   array on `boards` was itself replaced in `006` by a `position` column
+   directly on `columns`, which is what's still in use today.
+2. Auth/ownership wasn't part of the original schema — `identities`,
+   `users`, and `refresh_tokens` were added in `008`–`010`, and
+   `creator_id` foreign keys were retrofitted onto `boards`, `columns`,
+   and `tasks` in `011`–`013`.
+
+### `identities` vs `users`
+
+Login credentials and profile info are split across two 1:1 tables that
+share the same primary key:
+
+- **`identities`** — `id`, `email` (unique), `password_hash`, timestamps.
+  This is the row created first on sign-up, and is what every
+  `creator_id` foreign key (on boards, columns, tasks) and
+  `refresh_tokens.user_id` actually points to.
+- **`users`** — `id` (FK → `identities.id`, `ON DELETE CASCADE`), `email`
+  (duplicated, also unique), `first_name`, `last_name`, timestamps. This
+  is the profile data returned by `POST /api/sign-up`.
+
+`handlerSignUp` creates the `identities` row first (hashing the password),
+then creates the `users` row with the **same UUID** as its `id`. So a
+user's ID is the same value whether you're looking at it via `identities`,
+`users`, or a `creator_id` column elsewhere — deleting the `identities`
+row cascades and takes the `users` row, their boards/columns/tasks, and
+any refresh tokens with it.
+
+### `refresh_tokens`
+
+`token` (opaque string, primary key), `user_id` (FK → `identities.id`,
+cascade delete), `expires_at`, `revoked_at` (nullable — set when a token
+is revoked, though no endpoint in the reviewed handlers currently sets
+it), and timestamps. `POST /api/login` creates one; `POST /api/refresh`
+reads it back by token and checks `revoked_at`/`expires_at` before
+issuing a new access token.
+
+- Go 1.27.0 (matches what CI/CD uses — the router also relies on Go
+  1.22+'s method+wildcard patterns, so anything 1.22 or newer should work)
 - PostgreSQL
 - `sqlc` CLI (query code must be generated before the project builds)
 - `goose` CLI, for running migrations
@@ -151,19 +221,10 @@ enforced consistently for tasks now, including on
 Errors come back as non-2xx status codes with a JSON body describing the
 problem (exact shape depends on `respondWithError`, which wasn't part of
 the files reviewed — but expect the message text from the errors listed
-below to appear in the body somewhere).
-
-Common status codes:
-
-| Code      | Meaning                                                                                                                                   |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| 400       | Malformed JSON body, or a validation failure (missing/empty required field, out-of-range position, title too long, nil `column_id`, etc.) |
-| 401       | Missing/invalid/expired bearer token                                                                                                      |
-| 403       | Authenticated, but you don't own the board being accessed                                                                                 |
-| 404       | Resource doesn't exist, `ENV != dev` (for `/reset`), or a column/task ID doesn't belong to the board in the path                          |
-| 409       | Conflict — e.g. duplicate email on sign-up                                                                                                |
-| 500       | Unexpected server/database error                                                                                                          |
-| 503 / 504 | Database unavailable / query timed out                                                                                                    |
+throughout this doc to appear in the body somewhere). Status codes are
+called out endpoint-by-endpoint below rather than in one general table,
+since what triggers a given code (400 vs 404 vs 403, etc.) differs by
+endpoint.
 
 ---
 
@@ -382,5 +443,18 @@ Task {
 
 User {
   email, first_name, last_name, created_at, updated_at
+}
+```
+
+The tables below back the models above but aren't returned directly by
+any endpoint reviewed (see [Database schema](#database-schema)):
+
+```ts
+Identity {   // internal — auth/credentials, not exposed over the API
+  id, email, password_hash, created_at, updated_at
+}
+
+RefreshToken {   // internal — token/expiry bookkeeping
+  token, user_id, expires_at, revoked_at, created_at, updated_at
 }
 ```
